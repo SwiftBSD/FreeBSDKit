@@ -1,59 +1,71 @@
+/*
+ * Copyright (c) 2026 Kory Heard
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *   1. Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *   2. Redistributions in binary form must reproduce the above copyright notice,
+ *      this list of conditions and the following disclaimer in the documentation
+ *      and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
 import CCapsicum
 import Glibc
 
+/// Errors that can occur when working with Capsicum capabilities.
+///
 public enum CapsicumError: Error {
-    /// Thrown when the system is not compiled with Capsicum support.
+
+    /// Capsicum is not supported on the current system.
+    ///
+    /// This error is thrown when attempting to use Capsicum functionality
+    /// on an runtime that does not provide Capsicum support.
     case capsicumUnsupported
 }
 
-public struct IoctlCommand {
-    public let rawValue: UInt
-}
-
-public enum CapsicumIoctlError: Error {
-    /// The file descriptor is invalid (EBADF).
-    case invalidDescriptor
-    
-    /// The commands buffer pointer was invalid (EFAULT).
-    case badBuffer
-    
-    /// The buffer was too small for the allowed ioctl list.
-    case insufficientBuffer(expected: Int)
-    
-    /// All ioctls are explicitly allowed (no limit applied).
-    case allIoctlsAllowed
-    
-    /// Some other underlying errno error.
-    case system(errno: Int32)
-}
-
-
-public struct FcntlRights: OptionSet {
-    public let rawValue: UInt32
-    // The API calls for unsigned types.
-    public static let getFlags = FcntlRights(rawValue: UInt32(CAP_FCNTL_GETFL))
-    public static let setFlags = FcntlRights(rawValue: UInt32(CAP_FCNTL_SETFL))
-    public static let getOwner = FcntlRights(rawValue: UInt32(CAP_FCNTL_GETOWN))
-    public static let setOwner = FcntlRights(rawValue: UInt32(CAP_FCNTL_SETOWN))
-
-    public init(rawValue: UInt32) {
-        self.rawValue = rawValue
-    }
-}
-
-
-/// An interface for FreeBSD Capsicum.
-/// man: capsicum
+/// A Swift interface to the FreeBSD Capsicum sandboxing API.
+///
+/// Capsicum is a capability and sandbox framework built into FreeBSD that
+/// allows a process to restrict itself to a set of permitted operations
+/// on file descriptors and in capability mode. After entering capability
+/// mode, access to global system namespaces (like files by pathname)
+/// is disabled and operations are restricted to those explicitly
+/// permitted via rights limits.
 public enum Capsicum {
-    /// Enters capability mode.
-    /// `man cap_enter`
+
+    // MARK: — Capability Mode
+
+    /// Enters *Capsicum capability mode* for the current process.
+    ///
+    /// Once in capability mode, the process cannot access global namespaces
+    /// such as the file system by path or the PID namespace. Only operations
+    /// on file descriptors with appropriate rights remain permitted.
+    ///
+    /// - Throws: `CapsicumError.capsicumUnsupported` if Capsicum is unavailable.
     public static func enter() throws {
         guard cap_enter() == 0 else {
             throw CapsicumError.capsicumUnsupported
         }
     }
-    /// Returns `true` if the process is in Capability mode.
-    /// `man cap_getmode`
+
+    /// Determines whether the current process is already in capability mode.
+    ///
+    /// - Returns: `true` if capability mode is enabled, `false` otherwise.
+    /// - Throws: `CapsicumError.capsicumUnsupported` if Capsicum is unavailable.
     public static func status() throws -> Bool {
         var mode: UInt32 = 0
         guard cap_getmode(&mode) == 0 else {
@@ -61,12 +73,24 @@ public enum Capsicum {
         }
         return mode == 1
     }
-    // TODO: Integrate with common Swift file representations
+    
+    // MARK: — Limiting Rights
+
+    /// Applies a set of capability rights to a given file descriptor.
+    ///
+    /// - Parameter fd: A file descriptor to limit.
+    /// - Parameter rights: A `CapabilityRightSet` representing the rights to permit.
+    /// - Returns: `true` if the rights were successfully applied; `false` on failure.
     public static func limit(fd: Int32, rights: CapabilityRightSet) -> Bool {
         var cRights = rights.asCapRightsT()
         return ccapsicum_cap_limit(fd, &cRights) == 0
     }
 
+    /// Restricts the set of permitted ioctl commands for a file descriptor.
+    ///
+    /// - Parameter fd: The file descriptor to limit.
+    /// - Parameter commands: A list of ioctl codes (`IoctlCommand`) to permit.
+    /// - Returns: The result of the underlying C call (`0` on success, `-1` on failure).
     public static func limitIoctls(fd: Int32, commands: [IoctlCommand]) -> Int32 {
         let values = commands.map { $0.rawValue }
         return values.withUnsafeBufferPointer { cmdArray in
@@ -74,24 +98,40 @@ public enum Capsicum {
         }
     }
 
-    public static func limitFcntls(fd: Int32, rights: FcntlRights) -> Int32 {
-        return ccapsicum_limit_fcntls(fd, rights.rawValue)
-    }
-
-    /// Fetch the allowed ioctl commands for a descriptor.
+    /// Restricts the permitted `fcntl(2)` commands on a file descriptor.
+    ///
     /// - Parameters:
-    ///   - fd: The file descriptor to query.
-    ///   - maxCount: A buffer size hint for the maximum number of ioctl commands to fetch.
-    /// - Throws: `CapsicumIoctlError` on failure or special conditions.
-    /// - Returns: An array of `IoctlCommand` representing allowed ioctl requests.
+    ///   - fd: The file descriptor to restrict.
+    ///   - rights: An OptionSet of allowed fcntl commands.
+    /// - Throws: `CapsicumFcntlError` on failure.
+    public static func limitFcntls(fd: Int32, rights: FcntlRights) throws {
+        let result = ccapsicum_limit_fcntls(fd, rights.rawValue)
+        guard result == 0 else {
+            switch errno {
+            case EBADF:
+                throw CapsicumFcntlError.invalidDescriptor
+            case EINVAL:
+                throw CapsicumFcntlError.invalidFlag
+            case ENOTCAPABLE:
+                throw CapsicumFcntlError.notCapable
+            default:
+                throw CapsicumFcntlError.system(errno: errno)
+            }
+        }
+    }
+    // MARK: — Querying Limits
+
+    /// Fetches the set of currently allowed ioctl commands for a descriptor.
+    ///
+    /// - Parameter fd: The descriptor whose ioctl limits are being queried.
+    /// - Parameter maxCount: A buffer size hint for how many commands to buffer.
+    /// - Throws: `CapsicumIoctlError` for invalid descriptors, bad buffers,
+    ///   insufficient buffer size, “all allowed” state, or other errno conditions.
+    /// - Returns: An array of permitted `IoctlCommand` values.
     public static func getIoctls(fd: Int32, maxCount: Int = 32) throws -> [IoctlCommand] {
-        // Prepare a local buffer for up to maxCount values
         var rawBuffer = [UInt](repeating: 0, count: maxCount)
-        
-        // Call the C wrapper for cap_ioctls_get
         let result = ccapsicum_get_ioctls(fd, &rawBuffer, rawBuffer.count)
         
-        // Check for errors (‑1, with errno set)
         if result < 0 {
             switch errno {
             case EBADF:
@@ -103,41 +143,25 @@ public enum Capsicum {
             }
         }
         
-        // If all ioctls are allowed, C returns the special constant CAP_IOCTLS_ALL.
-        // On FreeBSD, CAP_IOCTLS_ALL is returned when cap_ioctls_limit was never called
-        // on this descriptor. :contentReference[oaicite:1]{index=1}
         if result == CAP_IOCTLS_ALL {
             throw CapsicumIoctlError.allIoctlsAllowed
         }
         
-        // result is the actual number of allowed ioctls
         let count = Int(result)
-        
-        // If count is larger than our buffer, the buffer was insufficient
-        // According to manpage, cap_ioctls_get always returns the total number
-        // allowed, even if greater than maxcmds. :contentReference[oaicite:2]{index=2}
         if count > rawBuffer.count {
             throw CapsicumIoctlError.insufficientBuffer(expected: count)
         }
         
-        // Map the raw values into typed IoctlCommand
-        let allowedCommands: [IoctlCommand] = rawBuffer.prefix(count).map {
-            IoctlCommand(rawValue: $0)
-        }
-        
-        return allowedCommands
+        return rawBuffer.prefix(count).map { IoctlCommand(rawValue: $0) }
     }
-  
 
-    /// Query the current fcntl rights bitmask for a descriptor.
+    /// Retrieves the currently permitted `fcntl` rights mask on a descriptor.
     ///
-    /// - Parameter fd: The file descriptor whose fcntl rights to read.
-    /// - Returns: A FcntlRights bitmask of allowed fcntl operations,
-    ///            or nil on error (check errno).
+    /// - Parameter fd: The file descriptor whose fcntl rights are being queried.
+    /// - Returns: A `FcntlRights` bitmask describing the allowed commands, or `nil` if the query fails.
     public static func getFcntls(fd: Int32) -> FcntlRights? {
         var rawMask: UInt32 = 0
         let result = ccapsicum_get_fcntls(fd, &rawMask)
-
         guard result >= 0 else {
             return nil
         }

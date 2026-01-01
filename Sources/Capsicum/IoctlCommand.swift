@@ -23,10 +23,32 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-import Capsicum
+import CCapsicum
+import Glibc
 
-print("BEGIN *************************")
-print("Capability status: \(try! Capsicum.status())")
-let _ = try! Capsicum.enter()
-print("Capability status: \(try! Capsicum.status())")
-print("END *************************")
+/// A wrapper type representing a single `ioctl(2)` command code
+/// that may be permitted or returned by Capsicum’s ioctl limits.
+///
+public struct IoctlCommand {
+    public let rawValue: UInt
+}
+
+/// Errors that can occur when querying or interpreting the list of
+/// allowed `ioctl(2)` commands on a file descriptor under Capsicum.
+///
+public enum CapsicumIoctlError: Error {
+    /// The file descriptor is invalid (EBADF).
+    case invalidDescriptor
+    
+    /// The commands buffer pointer was invalid (EFAULT).
+    case badBuffer
+    
+    /// The buffer was too small for the allowed ioctl list.
+    case insufficientBuffer(expected: Int)
+    
+    /// All ioctls are explicitly allowed (no limit applied).
+    case allIoctlsAllowed
+    
+    /// Some other underlying errno error.
+    case system(errno: Int32)
+}

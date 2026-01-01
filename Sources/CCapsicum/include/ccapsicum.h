@@ -1,3 +1,28 @@
+/*
+ * Copyright (c) 2026 Kory Heard
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *   1. Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *   2. Redistributions in binary form must reproduce the above copyright notice,
+ *      this list of conditions and the following disclaimer in the documentation
+ *      and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #pragma once
 
 #include <sys/capsicum.h>
@@ -88,46 +113,136 @@ typedef enum {
 
 // MARK: Bridging functions.
 
-// Selects the correct capability at runtime.
-uint64_t inline
+/// Selects the correct Capsicum capability at runtime.
+///
+/// This function resolves a platform-appropriate capability value
+/// from a bridged representation.
+///
+/// @param r A bridged Capsicum right.
+/// @return The resolved 64-bit capability value.
+inline uint64_t
 ccapsicum_selector(ccapsicum_right_bridge r);
 
-// MARK: Cap Rights Functions
-inline int 
-ccapsicum_cap_limit(int fd, const cap_rights_t* rights);
+/// Limits the rights on a file descriptor.
+///
+/// Applies the given Capsicum rights to the file descriptor, restricting
+/// future operations.
+///
+/// @param fd The file descriptor to limit.
+/// @param rights The rights to apply.
+/// @return 0 on success, or -1 on failure with errno set.
+inline int
+ccapsicum_cap_limit(int fd, const cap_rights_t *rights);
 
-inline cap_rights_t*
+/// Initializes a Capsicum rights structure.
+///
+/// Sets the rights structure to an empty, valid state.
+///
+/// @param rights A pointer to a rights structure.
+/// @return The initialized rights structure.
+inline cap_rights_t *
 ccapsicum_rights_init(cap_rights_t *rights);
 
-inline cap_rights_t*
-ccapsicum_cap_rights_merge(cap_rights_t* rightA, const cap_rights_t* rightB);
+/// Merges two Capsicum rights sets.
+///
+/// The resulting rights contain the union of both inputs.
+///
+/// @param rightA The destination rights set.
+/// @param rightB The rights to merge into `rightA`.
+/// @return The merged rights structure.
+inline cap_rights_t *
+ccapsicum_cap_rights_merge(cap_rights_t *rightA,
+                           const cap_rights_t *rightB);
 
-inline cap_rights_t*
-ccaspsicum_cap_set(cap_rights_t* right, ccapsicum_right_bridge cap);
+/// Sets a specific capability right.
+///
+/// @param right The rights structure to modify.
+/// @param cap The capability to set.
+/// @return The updated rights structure.
+inline cap_rights_t *
+ccaspsicum_cap_set(cap_rights_t *right,
+                   ccapsicum_right_bridge cap);
 
+/// Tests whether a capability is present in a rights set.
+///
+/// @param rights The rights structure to test.
+/// @param right The capability to check.
+/// @return `true` if the right is present, otherwise `false`.
 inline bool
-ccapsicum_right_is_set(const cap_rights_t* rights, ccapsicum_right_bridge right);
+ccapsicum_right_is_set(const cap_rights_t *rights,
+                       ccapsicum_right_bridge right);
 
+/// Validates a Capsicum rights structure.
+///
+/// @param rights The rights structure to validate.
+/// @return `true` if the rights are valid, otherwise `false`.
 inline bool
-ccapsicum_rights_valid(cap_rights_t* rights);
+ccapsicum_rights_valid(cap_rights_t *rights);
 
+/// Removes the given capability if it is present.
+///
+/// @param rights The rights structure to modify.
+/// @param right The capability to clear.
 inline void
-ccapsicum_rights_clear(cap_rights_t* rights, ccapsicum_right_bridge right);
+ccapsicum_rights_clear(cap_rights_t *rights,
+                       ccapsicum_right_bridge right);
 
+/// Tests whether one rights set contains another.
+///
+/// @param big The superset of rights.
+/// @param little The subset of rights.
+/// @return `true` if `big` contains all rights in `little`.
 inline bool
-ccapsicum_rights_contains(const cap_rights_t *big, const cap_rights_t *little);
+ccapsicum_rights_contains(const cap_rights_t *big,
+                          const cap_rights_t *little);
 
-inline cap_rights_t*
-ccapsicum_rights_remove(cap_rights_t *dst, const cap_rights_t *src);
+/// Removes rights from a destination set.
+///
+/// All rights present in `src` are removed from `dst`.
+///
+/// @param dst The destination rights structure.
+/// @param src The rights to remove.
+/// @return The updated destination rights structure.
+inline cap_rights_t *
+ccapsicum_rights_remove(cap_rights_t *dst,
+                        const cap_rights_t *src);
 
+/// Limits the allowed ioctl commands on a file descriptor.
+///
+/// @param fd The file descriptor to restrict.
+/// @param cmds An array of allowed ioctl commands.
+/// @param ncmds The number of commands in `cmds`.
+/// @return 0 on success, or -1 on failure.
 inline int
-ccapsicum_limit_ioctls(int fd, const unsigned long *cmds, size_t ncmds);
+ccapsicum_limit_ioctls(int fd,
+                       const unsigned long *cmds,
+                       size_t ncmds);
 
+/// Retrieves the allowed ioctl commands for a file descriptor.
+///
+/// @param fd The file descriptor to query.
+/// @param cmds A buffer to receive ioctl commands.
+/// @param maxcmds The maximum number of commands to write.
+/// @return The number of commands written, or -1 on failure.
 inline ssize_t
-ccapsicum_get_ioctls(int fd, unsigned long *cmds, size_t maxcmds);
+ccapsicum_get_ioctls(int fd,
+                     unsigned long *cmds,
+                     size_t maxcmds);
 
+/// Limits the allowed fcntl operations on a file descriptor.
+///
+/// @param fd The file descriptor to restrict.
+/// @param fcntlrights A bitmask of allowed fcntl operations.
+/// @return 0 on success, or -1 on failure.
 inline int
-ccapsicum_limit_fcntls(int fd, uint32_t fcntlrights);
+ccapsicum_limit_fcntls(int fd,
+                       uint32_t fcntlrights);
 
+/// Retrieves the allowed fcntl operations for a file descriptor.
+///
+/// @param fd The file descriptor to query.
+/// @param fcntlrightsp A pointer to receive the fcntl rights bitmask.
+/// @return 0 on success, or -1 on failure.
 inline int
-ccapsicum_get_fcntls(int fd, uint32_t *fcntlrightsp);
+ccapsicum_get_fcntls(int fd,
+                     uint32_t *fcntlrightsp);
