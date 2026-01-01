@@ -27,6 +27,7 @@
 
 #include <sys/capsicum.h>
 #include <sys/caprights.h>
+#include <capsicum_helpers.h>
 
 // MARK: Right Bridge.C MACROs are not callable from Swift, so we bridge.
 typedef enum {

@@ -27,15 +27,52 @@ import CCapsicum
 import Glibc
 
 /// Errors that can occur when working with Capsicum capabilities.
-///
-public enum CapsicumError: Error {
+public enum CapsicumError: Error, Equatable {
 
     /// Capsicum is not supported on the current system.
-    ///
-    /// This error is thrown when attempting to use Capsicum functionality
-    /// on an runtime that does not provide Capsicum support.
     case capsicumUnsupported
+
+    /// Casper (Capsicum sandbox helpers) is not supported on the current system.
+    case casperUnsupported
+
+    /// The file descriptor provided was invalid.
+    case badFileDescriptor
+
+    /// One or more arguments (flags, options) were invalid.
+    case invalidArgument
+
+    /// Attempted to expand capability rights, which is not allowed.
+    case notCapable
+
+    /// Operation not permitted in capability mode.
+    case capabilityModeViolation
+
+    /// Other errno not covered by specific cases.
+    case underlyingFailure(errno: Int32)
+
+    static func errorFromErrno(_ code: Int32, isCasper: Bool = false) -> CapsicumError {
+        switch code {
+        case ENOSYS:
+            return isCasper ? .casperUnsupported : .capsicumUnsupported
+        
+        case EBADF:
+            return .badFileDescriptor
+        
+        case EINVAL:
+            return .invalidArgument
+        
+        case ENOTCAPABLE:
+            return .notCapable
+        
+        case ECAPMODE:
+            return .capabilityModeViolation
+        
+        default:
+            return .underlyingFailure(errno: code)
+        }
+    }
 }
+
 
 /// A Swift interface to the FreeBSD Capsicum sandboxing API.
 ///
@@ -90,11 +127,18 @@ public enum Capsicum {
     ///
     /// - Parameter fd: The file descriptor to limit.
     /// - Parameter commands: A list of ioctl codes (`IoctlCommand`) to permit.
-    /// - Returns: The result of the underlying C call (`0` on success, `-1` on failure).
-    public static func limitIoctls(fd: Int32, commands: [IoctlCommand]) -> Int32 {
+    /// - Throws: `CapsicumError` if the underlying call fails.
+    public static func limitIoctls(fd: Int32, commands: [IoctlCommand]) throws {
         let values = commands.map { $0.rawValue }
-        return values.withUnsafeBufferPointer { cmdArray in
+
+        let result = values.withUnsafeBufferPointer { cmdArray in
             ccapsicum_limit_ioctls(fd, cmdArray.baseAddress, cmdArray.count)
+        }
+
+        if result == -1 {
+            // Capture errno immediately
+            let err = errno
+            throw CapsicumError.errorFromErrno(err)
         }
     }
 
