@@ -29,7 +29,19 @@
 #include <sys/caprights.h>
 #include <capsicum_helpers.h>
 
-// MARK: Right Bridge.C MACROs are not callable from Swift, so we bridge.
+/**
+ * @enum ccapsicum_right_bridge
+ * @brief Individual Capsicum capability rights.
+ *
+ * Each constant represents a specific operation that can be permitted on a
+ * file descriptor when in Capsicum capability mode.
+ *
+ * @remarks These rights are used with functions like `cap_rights_limit()`,
+ * `cap_rights_is_set()`, and related Capsicum APIs.
+ * Note: The underlying C macros are not directly callable from Swift, so a Swift bridge
+ * (`CapabilityRight` and `CapabilityRightSet`) is used to provide type-safe
+ * access in Swift.
+ */
 typedef enum {
     CCAP_RIGHT_ACCEPT,
     CCAP_RIGHT_ACL_CHECK,
