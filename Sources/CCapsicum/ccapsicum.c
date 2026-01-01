@@ -44,6 +44,31 @@ ccapsicum_rights_remove(cap_rights_t *dst, const cap_rights_t *src) {
     return cap_rights_remove(dst, src);
 }
 
+int
+ccapsicum_limit_ioctls(int fd, const unsigned long *cmds, size_t ncmds)
+{
+    return cap_ioctls_limit(fd, cmds, ncmds);
+}
+
+ssize_t
+ccapsicum_get_ioctls(int fd, unsigned long *cmds, size_t maxcmds)
+{
+    return cap_ioctls_get(fd, cmds, maxcmds);
+}
+
+int
+ccapsicum_limit_fcntls(int fd, uint32_t fcntlrights)
+{
+    return cap_fcntls_limit(fd, fcntlrights);
+}
+
+int
+ccapsicum_get_fcntls(int fd, uint32_t *fcntlrightsp)
+{
+    return cap_fcntls_get(fd, fcntlrightsp);
+}
+
+
 uint64_t
 ccapsicum_selector(ccapsicum_right_bridge r)
 {

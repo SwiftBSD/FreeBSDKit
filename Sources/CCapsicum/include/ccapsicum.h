@@ -119,3 +119,15 @@ ccapsicum_rights_contains(const cap_rights_t *big, const cap_rights_t *little);
 
 inline cap_rights_t*
 ccapsicum_rights_remove(cap_rights_t *dst, const cap_rights_t *src);
+
+inline int
+ccapsicum_limit_ioctls(int fd, const unsigned long *cmds, size_t ncmds);
+
+inline ssize_t
+ccapsicum_get_ioctls(int fd, unsigned long *cmds, size_t maxcmds);
+
+inline int
+ccapsicum_limit_fcntls(int fd, uint32_t fcntlrights);
+
+inline int
+ccapsicum_get_fcntls(int fd, uint32_t *fcntlrightsp);

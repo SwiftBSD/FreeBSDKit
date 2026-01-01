@@ -80,8 +80,4 @@ public struct CapabilityRightSet {
     public func asCapRightsT() -> cap_rights_t {
         return rights
     }
-
-    public mutating func limit(fd: Int32) -> Bool {
-        ccapsicum_cap_limit(fd, &rights) == 0
-    }
 }
