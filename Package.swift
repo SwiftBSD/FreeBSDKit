@@ -7,8 +7,8 @@ let package = Package(
     name: "FreeBSDKit",
     products: [
         // Reserved. The Swift project hasn't decided on `import FreeBSD`
-        // or `import Glibc`, or something else as expsing libc. If we 
-        // can't come to consensues in 2026 we will expose a `libc` overlay
+        // or `import Glibc`, or something else longterm for expsing libc. If we 
+        // can't come to consensues in 2026 we will expose a `libc` overlay here.
         // .library(
         //     name: "FreeBSDKit",
         //     targets: ["FreeBSDKit"]
