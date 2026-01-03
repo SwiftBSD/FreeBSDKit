@@ -34,9 +34,7 @@ import Glibc
 /// mode, access to global system namespaces (like files by pathname)
 /// is disabled and operations are restricted to those explicitly
 /// permitted via rights limits.
-public enum Capsicum: Sendable {
-
-    // MARK: — Capability Mode
+public enum Capsicum {
 
     /// Enters *Capsicum capability mode* for the current process.
     ///

@@ -1,12 +1,35 @@
+/*
+ * Copyright (c) 2026 Kory Heard
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *   1. Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *   2. Redistributions in binary form must reproduce the above copyright notice,
+ *      this list of conditions and the following disclaimer in the documentation
+ *      and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
 import Capsicum
 import CCapsicum
 import Glibc
 import FreeBSDKit
 
 protocol Capability: Descriptor, ~Copyable {}
-
 extension Capability {
-    // MARK: — Limiting Rights
 
     /// Applies a set of capability rights to a given file descriptor.
     ///
@@ -23,6 +46,19 @@ extension Capability {
         }
     }
 
+    /// Restricts a stream (file descriptor) according to the specified options.
+    ///
+    /// - Parameters:
+    /// - options: Options specifying which operations are allowed (`StreamLimitOptions`).
+    /// - Throws: `CapsicumError` if the underlying call fails.
+    public func limitStream(options: StreamLimitOptions) throws {
+        let result = self.unsafe { fd in 
+            caph_limit_stream(fd, options.rawValue)
+        }
+        guard  result == 0 else {
+            throw CapsicumError.errorFromErrno(errno)
+        }
+    }
 
     /// Restricts the set of permitted ioctl commands for a file descriptor.
     ///
@@ -31,25 +67,22 @@ extension Capability {
     public func limitIoctls(commands: [IoctlCommand]) throws {
         let values = commands.map { $0.rawValue }
 
-        // Borrow descriptor
-        let result: Int32 = self.unsafe { fd in
+        let result = self.unsafe { fd in
             values.withUnsafeBufferPointer { cmdArray in
                 ccapsicum_limit_ioctls(fd, cmdArray.baseAddress, cmdArray.count)
             }
         }
 
-        // Check for errors
         guard result != -1 else {
             throw CapsicumError.errorFromErrno(errno)
         }
     }
 
-
     /// Restricts the permitted `fcntl(2)` commands on a file descriptor.
     ///
     /// - Parameters:
     ///   - rights: An OptionSet of allowed fcntl commands.
-    /// - Throws: `CapsicumFcntlError` on failure.
+    ///   - Throws: `CapsicumFcntlError` on failure.
     public func limitFcntls(rights: FcntlRights) throws {
         let result: Int32 = self.unsafe { fd in
             ccapsicum_limit_fcntls(fd, rights.rawValue)
@@ -68,8 +101,6 @@ extension Capability {
             }
         }
     }
-
-    // MARK: — Querying Limits
 
     /// Fetches the set of currently allowed ioctl commands for a descriptor.
     ///
@@ -117,12 +148,10 @@ extension Capability {
     public func getFcntls() -> FcntlRights? {
         var rawMask: UInt32 = 0
 
-        // Borrow the descriptor safely for the duration of the call
         let result: Int32 = self.unsafe { fd in
             ccapsicum_get_fcntls(fd, &rawMask)
         }
 
-        // If the call failed, return nil
         guard result >= 0 else {
             return nil
         }

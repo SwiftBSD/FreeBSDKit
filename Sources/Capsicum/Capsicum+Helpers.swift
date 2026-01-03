@@ -43,18 +43,6 @@ extension Capsicum {
         }
     }
 
-    /// Restricts a stream (file descriptor) according to the specified options.
-    ///
-    /// - Parameters:
-    ///   - fd: The file descriptor to restrict.
-    ///   - options: Options specifying which operations are allowed (`StreamLimitOptions`).
-    /// - Throws: `CapsicumError` if the underlying call fails.
-    public static func limitStream(fd: Int32, options: StreamLimitOptions) throws {
-        guard caph_limit_stream(fd, options.rawValue) == 0 else {
-            throw CapsicumError.errorFromErrno(errno)
-        }
-    }
-
     /// Restricts standard input (stdin) for the process.
     ///
     /// - Throws: `CapsicumError` if the underlying call fails.
@@ -92,15 +80,11 @@ extension Capsicum {
     }
 
     /// Cache timezone data in memory for faster access.
-    ///
-    /// This call is informational and does not throw.
     public static func cacheTZData() {
         caph_cache_tzdata()
     }
 
     /// Cache "cat" man pages in memory for faster access.
-    ///
-    /// This call is informational and does not throw.
     public static func cacheCatPages() {
         caph_cache_catpages()
     }

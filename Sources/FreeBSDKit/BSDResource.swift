@@ -22,3 +22,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+import Foundation
+
+public protocol BSDResource: ~Copyable {
+    associatedtype RAWBSD
+    consuming func take() -> RAWBSD
+    /// Tinkering with the internal state of anything with this protocol is a code smell.
+    func unsafe<R>(_ block: (RAWBSD) throws -> R) rethrows -> R
+}

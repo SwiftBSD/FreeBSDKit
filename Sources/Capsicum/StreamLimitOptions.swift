@@ -40,8 +40,6 @@ public struct StreamLimitOptions: OptionSet, Sendable {
         self.rawValue = rawValue
     }
 
-    // MARK: - Standard Options
-
     /// Ignore `EBADF` (bad file descriptor) errors on this stream.
     ///
     /// Use this if you want Capsicum to silently ignore invalid file descriptors.

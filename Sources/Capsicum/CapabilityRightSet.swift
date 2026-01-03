@@ -30,7 +30,7 @@ import FreeBSDKit
 ///
 /// `CapabilityRightSet` allows you to manage, merge, and validate Capsicum
 /// capability rights in a type-safe Swift way.
-public struct CapabilityRightSet: BSDRepresentable, Sendable {
+public struct CapabilityRightSet: BSDResource, Sendable {
     private var rights: cap_rights_t
 
     // MARK: - Initializers
@@ -63,6 +63,10 @@ public struct CapabilityRightSet: BSDRepresentable, Sendable {
             }
             return rights
         }()
+    }
+
+    public init(from other: borrowing CapabilityRightSet) {
+        self.rights = other.rights
     }
 
     // MARK: - Modifiers
@@ -113,7 +117,7 @@ public struct CapabilityRightSet: BSDRepresentable, Sendable {
     ///
     /// - Parameter other: Another `CapabilityRightSet` to check.
     /// - Returns: `true` if all rights from `other` are included in this set.
-    public mutating func contains(right other: CapabilityRightSet) -> Bool {
+    public mutating func contains(right other: borrowing CapabilityRightSet) -> Bool {
         var contains = false
         withUnsafePointer(to: other.rights) { otherRights in
             contains = ccapsicum_rights_contains(&self.rights, otherRights)
