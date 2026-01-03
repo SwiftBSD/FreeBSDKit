@@ -1,37 +1,42 @@
 import CProcessDescriptor
 import Glibc
 import Foundation
+import FreeBSDKit
 
+/// BSD process descriptor flags used with `pdfork`.
+public struct ProcessFlags: OptionSet {
+    public let rawValue: Int32
+    public init(rawValue: Int32) { self.rawValue = rawValue }
+
+    public static let pdwait    = ProcessFlags(rawValue: 0x01) // wait for child to exit
+    public static let pdtraced  = ProcessFlags(rawValue: 0x02) // child traced
+    public static let pdnowait  = ProcessFlags(rawValue: 0x04) // don't wait
+    // Add other flags from <sys/procdesc.h> as needed
+}
+
+public struct ForkResult: ~Copyable {
+    let descriptor: ProcessDescriptor
+    let isChild: Bool
+}
+
+/// Represents a BSD process descriptor.
 struct ProcessDescriptor: Capability, ~Copyable {
     public typealias RAWBSD = Int32
     private var fd: RAWBSD
 
     init(_ fd: RAWBSD) { self.fd = fd }
 
-    static func fork(flags: Int32 = 0) throws -> ProcessDescriptor {
-        var fd: Int32 = 0
-
-        let ret = pdfork(&fd, flags)
-        guard ret == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
-
-        return ProcessDescriptor(fd)
-    }
-
-    deinit { 
-        if fd >= 0 { 
-            Glibc.close(fd)
-        }
+    deinit {
+        if fd >= 0 { Glibc.close(fd) }
     }
 
     consuming func close() {
-        if fd >= 0 { 
-            Glibc.close(fd); fd = -1 
-        }
+        if fd >= 0 { Glibc.close(fd); fd = -1 }
     }
 
     consuming func take() -> RAWBSD {
-        let raw = fd; 
-        fd = -1; 
+        let raw = fd
+        fd = -1
         return raw
     }
 
@@ -39,7 +44,26 @@ struct ProcessDescriptor: Capability, ~Copyable {
         return try block(fd)
     }
 
-    /// Waits for the process to exit using `waitpid` on the PID
+    /// Forks a new process using pdfork.
+    ///
+    /// - Returns: Tuple containing:
+    ///   - `descriptor`: ProcessDescriptor for child (parent sees child descriptor, child sees self)
+    ///   - `isChild`: Bool indicating if the current context is child process
+    static func fork(flags: ProcessFlags = []) throws -> ForkResult {
+        var fd: Int32 = 0
+        let pid = pdfork(&fd, flags.rawValue)
+        guard pid >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
+
+        if pid == 0 {
+            // We are in the child
+            return ForkResult(descriptor: ProcessDescriptor(fd), isChild: true)
+        } else {
+            // We are in the parent
+            return ForkResult(descriptor: ProcessDescriptor(fd), isChild: false)
+        }
+    }
+
+    /// Wait for the process to exit using `waitpid`
     func wait() throws -> Int32 {
         let pid = try getPID()
         var status: Int32 = 0
@@ -48,10 +72,14 @@ struct ProcessDescriptor: Capability, ~Copyable {
         return status
     }
 
-    func kill(signal: Int32) throws {
-        guard pdkill(fd, signal) >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
+    /// Send a signal to the process
+    func kill(signal: ProcessSignal) throws {
+        guard pdkill(fd, signal.rawValue) >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+        }
     }
 
+    /// Get the PID of the process
     func getPID() throws -> pid_t {
         var pid: pid_t = 0
         let ret = pdgetpid(fd, &pid)
