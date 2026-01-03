@@ -33,9 +33,9 @@ let package = Package(
     ],
     targets: [
         // Reserved. See above.
-        // .target(
-        //     name: "FreeBSDKit"
-        // ),
+        .target(
+            name: "FreeBSDKit"
+        ),
         // .testTarget(
         //     name: "FreeBSDKitTests",
         //     dependencies: ["FreeBSDKit"]
@@ -46,7 +46,7 @@ let package = Package(
         ),
         .target(
             name: "Capsicum",
-            dependencies: ["CCapsicum"]
+            dependencies: ["CCapsicum", "FreeBSDKit"]
         ),
         .target(
             name: "Descriptors",

@@ -1,4 +1,5 @@
 import Foundation
+import FreeBSDKit
 
 public protocol Descriptor: BSDRepresentable, Sendable, ~Copyable
 where RAWBSD == Int32 {

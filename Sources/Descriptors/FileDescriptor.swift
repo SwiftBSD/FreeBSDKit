@@ -1,5 +1,6 @@
 import Glibc
 import Foundation
+import FreeBSDKit
 
 struct FileDescriptor: Capability, Descriptor, ~Copyable {
     private var fd: Int32
@@ -27,8 +28,8 @@ struct FileDescriptor: Capability, Descriptor, ~Copyable {
         return rawDescriptor
     }
 
-    func unsafeBorrow(_ block: (Int32) -> Void) {
-        block(fd)
+    func unsafe<R>(_ block: (RAWBSD) throws -> R ) rethrows -> R {
+        return try block(fd)
     }
 
     // MARK: File specific operations

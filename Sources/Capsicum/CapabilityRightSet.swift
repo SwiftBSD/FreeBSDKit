@@ -24,12 +24,13 @@
  */
 
 import CCapsicum
+import FreeBSDKit
 
 /// A set of capability rights for a file descriptor, wrapping `cap_rights_t`.
 ///
 /// `CapabilityRightSet` allows you to manage, merge, and validate Capsicum
 /// capability rights in a type-safe Swift way.
-public struct CapabilityRightSet: Sendable {
+public struct CapabilityRightSet: BSDRepresentable, Sendable {
     private var rights: cap_rights_t
 
     // MARK: - Initializers
@@ -126,8 +127,8 @@ public struct CapabilityRightSet: Sendable {
     ///
     /// - Parameter other: The set of rights to merge.
     public mutating func merge(with other: CapabilityRightSet) {
-        withUnsafePointer(to: other.rights) { srcPtr in
-            _ = ccapsicum_cap_rights_merge(&self.rights, srcPtr)
+        withUnsafePointer(to: other.rights) { otherRights in
+            _ = ccapsicum_cap_rights_merge(&self.rights, otherRights)
         }
     }
 
@@ -135,8 +136,8 @@ public struct CapabilityRightSet: Sendable {
     ///
     /// - Parameter right: The set of rights to remove from this set.
     public mutating func remove(matching right: CapabilityRightSet) {
-        withUnsafePointer(to: right.rights) { srcPtr in
-            _ = ccapsicum_rights_remove(&self.rights, srcPtr)
+        withUnsafePointer(to: right.rights) { otherRights in
+            _ = ccapsicum_rights_remove(&self.rights, otherRights)
         }
     }
 
@@ -154,7 +155,11 @@ public struct CapabilityRightSet: Sendable {
     /// Returns the underlying `cap_rights_t` structure.
     ///
     /// - Returns: The raw `cap_rights_t` representing this set.
-    public func asCapRightsT() -> cap_rights_t {
+    public consuming func take() -> cap_rights_t {
         return rights
+    }
+
+    public func unsafe<R>(_ block: (RAWBSD) throws -> R) rethrows -> R {
+        return try block(self.rights)
     }
 }
