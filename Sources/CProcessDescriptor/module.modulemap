@@ -1,0 +1,4 @@
+module ProcessDescriptorBridge [system] {
+    header "include/CProcessDescriptor"
+    export *
+}

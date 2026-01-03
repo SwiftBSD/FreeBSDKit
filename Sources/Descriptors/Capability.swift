@@ -28,7 +28,19 @@ import CCapsicum
 import Glibc
 import FreeBSDKit
 
-protocol Capability: Descriptor, ~Copyable {}
+/// `Capability` inherits from `Descriptor`, meaning it represents a resource
+/// with a raw `Int32` descriptor that can be closed and managed safely.
+///
+/// Conforming types indicate that the resource represents a **capability** in the
+/// system — that is, a controlled access token to perform operations, rather than
+/// just a raw descriptor. This is useful for enforcing capability-based security
+/// patterns in your code.
+///
+/// Typically, types conforming to `Capability` are more restrictive or specialized
+/// descriptors (e.g., `FileDescriptor`, `SocketDescriptor`, `KqueueDescriptor`),
+/// providing safe operations in addition to the universal `close()` method.
+public protocol Capability: Descriptor, ~Copyable {}
+
 extension Capability {
 
     /// Applies a set of capability rights to a given file descriptor.

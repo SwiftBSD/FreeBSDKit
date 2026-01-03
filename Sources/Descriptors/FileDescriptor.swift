@@ -27,10 +27,11 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-struct FileDescriptor: Capability, Descriptor, ~Copyable {
-    private var fd: Int32
+struct FileDescriptor: Capability, ~Copyable {
+    public typealias RAWBSD = Int32
+    private var fd: RAWBSD
 
-    init(_ value: Int32) {
+    init(_ value: RAWBSD) {
         self.fd = value
     }
 
@@ -47,7 +48,7 @@ struct FileDescriptor: Capability, Descriptor, ~Copyable {
         }
     }
 
-    consuming func take() -> Int32 {
+    consuming func take() -> RAWBSD {
         let rawDescriptor = fd
         fd = -1
         return rawDescriptor

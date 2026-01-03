@@ -26,8 +26,26 @@
 import Foundation
 import FreeBSDKit
 
+/// A protocol representing a generic BSD descriptor resource, such as a file descriptor,
+/// socket, kqueue, or process descriptor.
+///
+/// `Descriptor` extends `BSDResource` with a few properties and behaviors common to
+/// all descriptors:
+/// - They have an underlying raw BSD resource (`Int32`).
+/// - They can be closed to release the resource.
+/// - They can be sent across concurrency domains (`Sendable`).
+///
+/// Conforming types should provide an initializer from the raw descriptor and implement
+/// proper cleanup via `close()`.
 public protocol Descriptor: BSDResource, Sendable, ~Copyable
 where RAWBSD == Int32 {
+    /// Initializes the descriptor from a raw `Int32` resource.
+    ///
+    /// - Parameter value: The raw BSD descriptor.
     init(_ value: RAWBSD)
+
+    /// Consumes the descriptor and closes/releases the underlying resource.
+    ///
+    /// After calling this method, the descriptor should no longer be used.
     consuming func close()
 }

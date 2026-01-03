@@ -25,6 +25,10 @@ let package = Package(
             name: "Descriptors",
             targets: ["Descriptors"]
         ),
+        .library(
+            name: "CProcessDescriptor",
+            targets: ["CProcessDescriptor"]
+        ),
         .executable(
             name: "testtool",
             targets: ["TestTool"]
@@ -41,6 +45,10 @@ let package = Package(
         //     dependencies: ["FreeBSDKit"]
         // ),
         .target(
+            name: "CProcessDescriptor",
+            path: "Sources/CProcessDescriptor"
+        ),
+        .target(
             name: "CCapsicum",
             path: "Sources/CCapsicum"
         ),
@@ -50,7 +58,7 @@ let package = Package(
         ),
         .target(
             name: "Descriptors",
-            dependencies: ["Capsicum"]
+            dependencies: ["Capsicum", "CProcessDescriptor"]
         ),
         .executableTarget(
             name: "TestTool",
