@@ -59,7 +59,7 @@ public struct CapabilityRightSet: BSDResource, Sendable {
             var rights = cap_rights_t()
             ccapsicum_rights_init(&rights)
             for right in inRights {
-                ccaspsicum_cap_set(&rights, right.bridged)
+                ccapsicum_cap_set(&rights, right.bridged)
             }
             return rights
         }()
@@ -75,15 +75,15 @@ public struct CapabilityRightSet: BSDResource, Sendable {
     ///
     /// - Parameter capability: The capability to add.
     public mutating func add(capability: CapabilityRight) {
-        ccaspsicum_cap_set(&self.rights, capability.bridged)
+        ccapsicum_cap_set(&self.rights, capability.bridged)
     }
 
     /// Adds multiple capabilities to the set.
     ///
     /// - Parameter capabilities: An array of capabilities to add.
-    public mutating func add(capabilites: [CapabilityRight]) {
-        for cap in capabilites {
-            ccaspsicum_cap_set(&self.rights, cap.bridged)
+    public mutating func add(capabilities: [CapabilityRight]) {
+        for cap in capabilities {
+            ccapsicum_cap_set(&self.rights, cap.bridged)
         }
     }
 
@@ -97,8 +97,8 @@ public struct CapabilityRightSet: BSDResource, Sendable {
     /// Removes multiple capabilities from the set.
     ///
     /// - Parameter capabilities: An array of capabilities to remove.
-    public mutating func clear(capabilites: [CapabilityRight]) {
-        for cap in capabilites {
+    public mutating func clear(capabilities: [CapabilityRight]) {
+        for cap in capabilities {
             ccapsicum_rights_clear(&self.rights, cap.bridged)
         }
     }
@@ -109,18 +109,20 @@ public struct CapabilityRightSet: BSDResource, Sendable {
     ///
     /// - Parameter capability: The capability to check for.
     /// - Returns: `true` if the capability is present; otherwise, `false`.
-    public mutating func contains(capability: CapabilityRight) -> Bool {
-        return ccapsicum_right_is_set(&self.rights, capability.bridged)
+    public func contains(capability: CapabilityRight) -> Bool {
+        var rightsCopy = self.rights
+        return ccapsicum_right_is_set(&rightsCopy, capability.bridged)
     }
 
     /// Checks whether the set contains all rights from another `CapabilityRightSet`.
     ///
     /// - Parameter other: Another `CapabilityRightSet` to check.
     /// - Returns: `true` if all rights from `other` are included in this set.
-    public mutating func contains(right other: borrowing CapabilityRightSet) -> Bool {
+    public func contains(right other: borrowing CapabilityRightSet) -> Bool {
+        var rightsCopy = self.rights
         var contains = false
         withUnsafePointer(to: other.rights) { otherRights in
-            contains = ccapsicum_rights_contains(&self.rights, otherRights)
+            contains = ccapsicum_rights_contains(&rightsCopy, otherRights)
         }
         return contains
     }

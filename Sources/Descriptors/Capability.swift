@@ -41,7 +41,7 @@ import FreeBSDKit
 /// providing safe operations in addition to the universal `close()` method.
 public protocol Capability: Descriptor, ~Copyable {}
 
-extension Capability {
+extension Capability where Self: ~Copyable{
 
     /// Applies a set of capability rights to a given file descriptor.
     ///

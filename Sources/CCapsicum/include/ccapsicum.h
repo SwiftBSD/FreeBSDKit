@@ -173,7 +173,7 @@ ccapsicum_cap_rights_merge(cap_rights_t *rightA,
 /// @param cap The capability to set.
 /// @return The updated rights structure.
 inline cap_rights_t *
-ccaspsicum_cap_set(cap_rights_t *right,
+ccapsicum_cap_set(cap_rights_t *right,
                    ccapsicum_right_bridge cap);
 
 /// Tests whether a capability is present in a rights set.

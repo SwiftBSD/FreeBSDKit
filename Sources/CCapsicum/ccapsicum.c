@@ -23,9 +23,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-
-
 #include "ccapsicum.h"
+#include <assert.h>
 
 int
 ccapsicum_cap_limit(int fd, const cap_rights_t* rights) {
@@ -43,7 +42,7 @@ ccapsicum_cap_rights_merge(cap_rights_t* rightA, const cap_rights_t* rightB) {
 }
 
 cap_rights_t*
-ccaspsicum_cap_set(cap_rights_t* rights, ccapsicum_right_bridge right) {
+ccapsicum_cap_set(cap_rights_t* rights, ccapsicum_right_bridge right) {
     return cap_rights_set(rights, ccapsicum_selector(right));
 }
 
@@ -54,7 +53,7 @@ ccapsicum_right_is_set(const cap_rights_t* rights, ccapsicum_right_bridge right)
 
 void
 ccapsicum_rights_clear(cap_rights_t* rights, ccapsicum_right_bridge right) {
-    cap_rights_clear(rights, right);
+    cap_rights_clear(rights, ccapsicum_selector(right));
 }
 
 bool
@@ -94,7 +93,6 @@ ccapsicum_get_fcntls(int fd, uint32_t *fcntlrightsp)
 {
     return cap_fcntls_get(fd, fcntlrightsp);
 }
-
 
 uint64_t
 ccapsicum_selector(ccapsicum_right_bridge r)
@@ -178,5 +176,8 @@ ccapsicum_selector(ccapsicum_right_bridge r)
     case CCAP_RIGHT_SYMLINKAT:       return CAP_SYMLINKAT;
     case CCAP_RIGHT_TTYHOOK:         return CAP_TTYHOOK;
     case CCAP_RIGHT_UNLINKAT:        return CAP_UNLINKAT;
+    default:
+        fprintf(stderr, "Error: Invalid ccapsicum_right_bridge value: %d\n", r);
+        return UINT64_MAX; // Indicates an error
     }
 }

@@ -45,10 +45,6 @@ let package = Package(
         //     dependencies: ["FreeBSDKit"]
         // ),
         .target(
-            name: "CProcessDescriptor",
-            path: "Sources/CProcessDescriptor"
-        ),
-        .target(
             name: "CCapsicum",
             path: "Sources/CCapsicum"
         ),
@@ -56,9 +52,25 @@ let package = Package(
             name: "Capsicum",
             dependencies: ["CCapsicum", "FreeBSDKit"]
         ),
+        .testTarget(
+            name: "CapsicumTests",
+            dependencies: ["Capsicum"]
+        ),
+        .testTarget(
+            name: "CCapsicumTests",
+            dependencies: ["CCapsicum"]
+        ),
+        .target(
+            name: "CProcessDescriptor",
+            path: "Sources/CProcessDescriptor"
+        ),
         .target(
             name: "Descriptors",
             dependencies: ["Capsicum", "CProcessDescriptor"]
+        ),
+        .testTarget(
+            name: "DescriptorsTests",
+            dependencies: ["Capsicum", "CProcessDescriptor", "Descriptors"]
         ),
         .executableTarget(
             name: "TestTool",
