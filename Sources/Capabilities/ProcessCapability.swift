@@ -83,7 +83,7 @@ struct ProcessCapability: Capability, ProcessDescriptor, ~Copyable {
     }
 
     /// Send a signal to the process
-    func kill(signal: ProcessSignal) throws {
+    func kill(signal: BSDSignal) throws {
         guard pdkill(fd, signal.rawValue) >= 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno)!)
         }

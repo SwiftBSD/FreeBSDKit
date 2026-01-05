@@ -1,5 +1,5 @@
 /// Standard signals for process descriptors.
-public enum Signals: Int32 {
+public enum BSDSignal: Int32 {
     case hangup       = 1
     case interrupt    = 2
     case quit         = 3
