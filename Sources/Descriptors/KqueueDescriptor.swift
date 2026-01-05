@@ -27,7 +27,7 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-public protocol KqueueDescriptor: ~Copyable {
+public protocol KqueueDescriptor: Descriptor, ~Copyable {
     static func makeKqueue() throws -> Self
 
     func kevent(

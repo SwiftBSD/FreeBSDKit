@@ -27,12 +27,12 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-public protocol ReadableDescriptor: ~Copyable {
+public protocol ReadableDescriptor: Descriptor, ~Copyable {
     func read(count: Int) throws -> Data
 }
 
-public protocol WritableDescriptor: ~Copyable {
+public protocol WritableDescriptor: Descriptor, ~Copyable {
     func write(_ data: Data) throws -> Int
 }
 
-typealias ReadWriteDescriptor = ReadableDescriptor & WritableDescriptor
+public typealias ReadWriteDescriptor = ReadableDescriptor & WritableDescriptor

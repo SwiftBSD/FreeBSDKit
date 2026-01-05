@@ -47,7 +47,7 @@ public struct ProcessDescriptorForkResult: ~Copyable {
     }
 }
 
-public protocol ProcessDescriptor: ~Copyable {
+public protocol ProcessDescriptor: Descriptor, ~Copyable {
     static func fork(flags: ProcessDescriptorFlags) throws -> ProcessDescriptorForkResult
     func wait() throws -> Int32
     func kill(signal: BSDSignal) throws

@@ -27,10 +27,7 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-public protocol FileDescriptor:
-    ReadableDescriptor,
-    WritableDescriptor,
-    ~Copyable {
+public protocol FileDescriptor: ReadWriteDescriptor, ~Copyable {
     // static func open(_ path: String, flags: Int32, mode: mode_t) throws -> Self
     // // openAt
     // static func open(relativeTo dir: borrowing Self, path: String, flags: Int32, mode: mode_t) throws -> Self

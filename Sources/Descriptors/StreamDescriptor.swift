@@ -27,7 +27,7 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-public protocol StreamDescriptor: ReadableDescriptor, WritableDescriptor, ~Copyable {}
+public protocol StreamDescriptor: ReadWriteDescriptor, ~Copyable {}
 
 public protocol SocketDescriptor: StreamDescriptor, ~Copyable {
     static func socket(domain: Int32, type: Int32, proto: Int32) throws -> Self

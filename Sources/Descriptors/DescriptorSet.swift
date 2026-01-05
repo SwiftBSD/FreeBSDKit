@@ -29,21 +29,43 @@ import FreeBSDKit
 
 
 public struct DescriptorSet: Sendable {
-    private var descriptors: [BoxedDescriptor] = []
+    private var descriptors: [OpaqueDescriptorRef] = []
 
     public init() {}
 
     public
-    mutating func insert<D: Descriptor>(kind: DescriptorKind, _ descriptor: consuming D) {
+    mutating func insert<D: Descriptor>(kind: DescriptorKind, _ desc: consuming D) {
         descriptors.append(
-            BoxedDescriptor(kind: kind, fd: descriptor.take())
+            OpaqueDescriptorRef(kind: kind, fd: desc.take())
         )
     }
 
-    // TODO: Implement one of the Swift Iterator protocls.
-    public func forEach(where kind: DescriptorKind, _ block: (Int32) -> Void) {
-        for descriptor in descriptors where descriptor.kind == kind {
-            descriptor.unsafe(block)
+    public func all(ofKind kind: DescriptorKind) -> [OpaqueDescriptorRef] {
+        descriptors.filter { $0.kind == kind }
+    }
+
+    public func first(ofKind kind: DescriptorKind) -> OpaqueDescriptorRef? {
+        descriptors.first { $0.kind == kind }
+    }
+}
+
+extension DescriptorSet: Sequence {
+    public struct Iterator: Swift.IteratorProtocol {
+        private let descriptors: [OpaqueDescriptorRef]
+        private var index = 0
+
+        init(_ descriptors: [OpaqueDescriptorRef]) {
+            self.descriptors = descriptors
         }
+
+        public mutating func next() -> OpaqueDescriptorRef? {
+            guard index < descriptors.count else { return nil }
+            defer { index += 1 }
+            return descriptors[index]
+        }
+    }
+
+    public func makeIterator() -> Iterator {
+        Iterator(descriptors)
     }
 }

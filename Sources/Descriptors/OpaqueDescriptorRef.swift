@@ -29,13 +29,13 @@ import FreeBSDKit
 
 
 // TODO: Make this thread safe?
-/// Copyable so no capsicum.
+/// This type is copyable so 
 /// Type Erased reference counted file descriptor.
 /// Useful for storing many descriptors in collections,
 /// and eventually in KQueue.
-public final class BoxedDescriptor: Descriptor, @unchecked Sendable {
+public final class OpaqueDescriptorRef: CustomDebugStringConvertible, Descriptor, @unchecked Sendable {
     public let kind: DescriptorKind
-    private var fd: Int32
+    fileprivate var fd: Int32
 
     public init(_ value: RAWBSD) {
         self.fd = value
@@ -68,5 +68,9 @@ public final class BoxedDescriptor: Descriptor, @unchecked Sendable {
             Glibc.close(fd)
             fd = -1
         }
+    }
+
+    public var debugDescription: String {
+        "OpaqueDescriptorRef(kind: \(kind), fd: \(fd))"
     }
 }
