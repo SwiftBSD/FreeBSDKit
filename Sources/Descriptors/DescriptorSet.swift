@@ -27,7 +27,6 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-
 public struct DescriptorSet: Sendable {
     private var descriptors: [OpaqueDescriptorRef] = []
 

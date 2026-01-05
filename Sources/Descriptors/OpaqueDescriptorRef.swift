@@ -34,8 +34,9 @@ import FreeBSDKit
 /// Useful for storing many descriptors in collections,
 /// and eventually in KQueue.
 public final class OpaqueDescriptorRef: CustomDebugStringConvertible, Descriptor, @unchecked Sendable {
-    public var kind: DescriptorKind
-    fileprivate var fd: Int32
+    public let kind: DescriptorKind
+    private var fd: Int32
+    private let lock = NSLock()
 
     public init(_ value: RAWBSD) {
         self.fd = value
@@ -48,22 +49,30 @@ public final class OpaqueDescriptorRef: CustomDebugStringConvertible, Descriptor
     }
 
     deinit {
+        lock.lock()
         if fd >= 0 {
             Glibc.close(fd)
         }
+        lock.unlock()
     }
 
     public consuming func take() -> Int32 {
+        lock.lock()
+        defer { lock.unlock()}
         let raw = fd
         fd = -1
         return raw
     }
 
     public func unsafe<R>(_ body: (Int32) throws -> R) rethrows -> R {
-        try body(fd)
+        lock.lock()
+        defer { lock.unlock()}
+        return try body(fd)
     }
 
     public func close() {
+        lock.lock()
+        defer { lock.unlock()}
         if fd >= 0 {
             Glibc.close(fd)
             fd = -1
@@ -71,6 +80,8 @@ public final class OpaqueDescriptorRef: CustomDebugStringConvertible, Descriptor
     }
 
     public var debugDescription: String {
-        "OpaqueDescriptorRef(kind: \(kind), fd: \(fd))"
+        lock.withLock {
+            "OpaqueDescriptorRef(kind: \(kind), fd: \(fd))"
+        }
     }
 }
