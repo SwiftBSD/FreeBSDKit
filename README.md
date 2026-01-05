@@ -28,3 +28,7 @@ FreeBSDKit currently exposes:
 `CProcessDescritpors` is a wrapper for the process descritpor APIs.
 `Desciptors` Defines the descriptor protocols
 `Capabilites` Defines concrete implementations of the Capable Descriptors.
+
+## Big Todos
+
+The Swift toolchain includes a bunch of different types that are cross platform versions of the types defined here. For example `swift-corelibs-foundation` has a `Filehandle` type exposing a raw descriptor that can be extended to support `Capabilites`. If anyone has time write a PR with extensions for these types would be of great benefit.
