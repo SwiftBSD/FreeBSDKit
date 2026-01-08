@@ -1,52 +1,60 @@
-import Glibc
 import Foundation
+import CEventDescriptor
 
-/// A capability‑friendly event file descriptor.
-/// Implements the Linux/FreeBSD eventfd(2) interface.
-public protocol EventDescriptor: Descriptor, ~Copyable {
-    /// Create an eventfd with an initial count and flags (usually 0 or O_NONBLOCK|O_CLOEXEC).
-    static func eventfd(initValue: UInt64, flags: Int32) throws -> Self
+/// Flags passed to eventfd().
+public struct EventFDFlags: OptionSet {
+    public let rawValue: Int32
 
-    /// Increment the counter by `value`.
-    func signal(_ value: UInt64) throws
+    public init(rawValue: Int32) { self.rawValue = rawValue }
 
-    /// Decrement/consume the counter and return its old value.
-    func waitEvent() throws -> UInt64
+    /// Set FD_CLOEXEC
+    public static let cloexec   = EventFDFlags(rawValue: EFD_CLOEXEC)
+    /// Non-blocking read/write
+    public static let nonblock  = EventFDFlags(rawValue: EFD_NONBLOCK)
+    /// Read returns 1 and decrements (semaphore style)
+    public static let semaphore = EventFDFlags(rawValue: EFD_SEMAPHORE)
 }
+
+/// An descriptor that supports eventfd semantics.
+public protocol EventDescriptor: Descriptor, ~Copyable {
+    /// Create a new eventfd object.
+    static func eventfd(initValue: UInt32, flags: EventFDFlags) throws -> Self
+
+    /// Write/notify the counter by value.
+    func write(_ value: UInt64) throws
+
+    /// Read/consume the counter according to eventfd semantics.
+    func read() throws -> UInt64
+}
+
 
 public extension EventDescriptor where Self: ~Copyable {
 
-    static func eventfd(initValue: UInt64, flags: Int32) throws -> Self {
-        // On FreeBSD 13+ and Linux this exists in libc.
-        let fd = Glibc.eventfd(UInt32(initValue), flags)
+    static func eventfd(initValue: UInt32, flags: EventFDFlags) throws -> Self {
+        // Call shim C function
+        let fd = CEventDescriptor.eventfd(initValue, flags.rawValue)
         guard fd >= 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno)!)
         }
         return Self(fd)
     }
 
-    func signal(_ value: UInt64) throws {
+    func write(_ value: UInt64) throws {
         try self.unsafe { fd in
-            var v = value
-            let written = withUnsafePointer(to: &v) {
-                Glibc.write(fd, $0, MemoryLayout<UInt64>.size)
-            }
-            guard written == MemoryLayout<UInt64>.size else {
+            // Use shim writer
+            guard eventfd_write(fd, value) == 0 else {
                 throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
         }
     }
 
-    func waitEvent() throws -> UInt64 {
-        var result: UInt64 = 0
+    func read() throws -> UInt64 {
+        var val: UInt64 = 0
         try self.unsafe { fd in
-            let readBytes = withUnsafeMutablePointer(to: &result) {
-                Glibc.read(fd, $0, MemoryLayout<UInt64>.size)
-            }
-            guard readBytes == MemoryLayout<UInt64>.size else {
+            guard eventfd_read(fd, &val) == 0 else {
                 throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
         }
-        return result
+        return val
     }
 }

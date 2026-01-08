@@ -22,10 +22,41 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#pragma once
 
-#include <sys/param.h>
-#include <sys/procdesc.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <errno.h>
+import Glibc
+import Descriptors
+import Foundation
+import FreeBSDKit
+
+
+public struct EventCapability: Capability, EventDescriptor, ~Copyable {
+    public typealias RAWBSD = Int32
+    private var fd: RAWBSD
+
+    public init(_ raw: RAWBSD) {
+        self.fd = raw
+    }
+
+    deinit {
+        if fd >= 0 {
+            Glibc.close(fd)
+        }
+    }
+
+    public consuming func close() {
+        if fd >= 0 {
+            Glibc.close(fd)
+            fd = -1
+        }
+    }
+
+    public consuming func take() -> RAWBSD {
+        let raw = fd
+        fd = -1
+        return raw
+    }
+
+    public func unsafe<R>(_ block: (RAWBSD) throws -> R) rethrows -> R where R: ~Copyable {
+        return try block(fd)
+    }
+}
