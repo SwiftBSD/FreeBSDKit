@@ -31,25 +31,21 @@ import Glibc
 /// Represents a BSD process descriptor.
 struct ProcessCapability: Capability, ProcessDescriptor, ~Copyable {
     public typealias RAWBSD = Int32
-    private var fd: RAWBSD
+    private var handle: RawCapabilityHandle
 
-    init(_ fd: RAWBSD) { self.fd = fd }
-
-    deinit {
-        if fd >= 0 { Glibc.close(fd) }
+    public init(_ value: RAWBSD) {
+        self.handle = RawCapabilityHandle(value)
     }
 
-    consuming func close() {
-        if fd >= 0 { Glibc.close(fd); fd = -1 }
+    public consuming func close() {
+        handle.close()
     }
 
-    consuming func take() -> RAWBSD {
-        let raw = fd
-        fd = -1
-        return raw
+    public consuming func take() -> RAWBSD {
+        return handle.take()
     }
 
-    func unsafe<R>(_ block: (RAWBSD) throws -> R) rethrows -> R where R: ~Copyable  {
-        return try block(fd)
+    public func unsafe<R>(_ block: (RAWBSD) throws -> R ) rethrows -> R where R: ~Copyable {
+        try handle.unsafe(block)
     }
 }

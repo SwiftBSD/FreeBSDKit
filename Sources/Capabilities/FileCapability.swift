@@ -32,32 +32,21 @@ import FreeBSDKit
 // TODO: A seperate protocol should be used to describe file operations.
 struct FileCapability: Capability, FileDescriptor, ~Copyable {
     public typealias RAWBSD = Int32
-    private var fd: RAWBSD
+    private var handle: RawCapabilityHandle
 
-    init(_ value: RAWBSD) {
-        self.fd = value
+    public init(_ value: RAWBSD) {
+        self.handle = RawCapabilityHandle(value)
     }
 
-    deinit {
-        if fd >= 0 {
-            Glibc.close(fd)
-        }
+    public consuming func close() {
+        handle.close()
     }
 
-    consuming func close() {
-        if fd >= 0 {
-            Glibc.close(fd)
-            fd = -1
-        }
+    public consuming func take() -> RAWBSD {
+        return handle.take()
     }
 
-    consuming func take() -> RAWBSD {
-        let rawDescriptor = fd
-        fd = -1
-        return rawDescriptor
-    }
-
-    func unsafe<R>(_ block: (RAWBSD) throws -> R ) rethrows -> R where R: ~Copyable {
-        return try block(fd)
+    public func unsafe<R>(_ block: (RAWBSD) throws -> R ) rethrows -> R where R: ~Copyable {
+        try handle.unsafe(block)
     }
 }
