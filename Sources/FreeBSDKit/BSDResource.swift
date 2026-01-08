@@ -61,5 +61,5 @@ public protocol BSDResource: ~Copyable {
     ///
     /// - Warning: Tinkering with the internal state of the raw resource is generally unsafe
     ///   and may lead to undefined behavior. Prefer using higher-level abstractions.
-    func unsafe<R>(_ block: (RAWBSD) throws -> R) rethrows -> R
+    func unsafe<R>(_ block: (RAWBSD) throws -> R) rethrows -> R where R: ~Copyable
 }

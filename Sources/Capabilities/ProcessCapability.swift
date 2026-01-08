@@ -23,7 +23,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-import CProcessDescriptor
 import Descriptors
 import Foundation
 import FreeBSDKit
@@ -50,50 +49,7 @@ struct ProcessCapability: Capability, ProcessDescriptor, ~Copyable {
         return raw
     }
 
-    func unsafe<R>(_ block: (RAWBSD) throws -> R) rethrows -> R {
+    func unsafe<R>(_ block: (RAWBSD) throws -> R) rethrows -> R where R: ~Copyable  {
         return try block(fd)
-    }
-
-    /// Forks a new process.
-    ///
-    /// - Returns: `ProcessDescriptorForkResult` containing:
-    ///   - `Optional<descriptor>`: ProcessDescriptor for child (parent sees child descriptor, child sees nil)
-    ///   - `isChild`: Bool indicating if the current context is child process
-    static func fork(flags: ProcessDescriptorFlags = []) throws -> ProcessDescriptorForkResult {
-        var fd: Int32 = 0
-        let pid = pdfork(&fd, flags.rawValue)
-        guard pid >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
-
-        if pid == 0 {
-            // We are in the child
-            return ProcessDescriptorForkResult(descriptor: nil, isChild: true)
-        } else {
-            // We are in the parent
-            return ProcessDescriptorForkResult(descriptor: ProcessCapability(fd), isChild: false)
-        }
-    }
-
-    /// Wait for the process to exit.
-    func wait() throws -> Int32 {
-        let pid = try pid()
-        var status: Int32 = 0
-        let ret = Glibc.waitpid(pid, &status, 0)
-        guard ret >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
-        return status
-    }
-
-    /// Send a signal to the process
-    func kill(signal: BSDSignal) throws {
-        guard pdkill(fd, signal.rawValue) >= 0 else {
-            throw POSIXError(POSIXErrorCode(rawValue: errno)!)
-        }
-    }
-
-    /// Get the PID of the process
-    func pid() throws -> pid_t {
-        var pid: pid_t = 0
-        let ret = pdgetpid(fd, &pid)
-        guard ret >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
-        return pid
     }
 }

@@ -27,18 +27,34 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
+/// A generic stream descriptor (read/write)
 public protocol StreamDescriptor: ReadWriteDescriptor, ~Copyable {}
 
-public protocol SocketDescriptor: StreamDescriptor, ~Copyable {
-    static func socket(domain: Int32, type: Int32, proto: Int32) throws -> Self
 
-    func bind(address: UnsafePointer<sockaddr>, addrlen: socklen_t) throws
-    func listen(backlog: Int32) throws
-    func accept() throws -> Self
-    func connect(address: UnsafePointer<sockaddr>, addrlen: socklen_t) throws
+public extension StreamDescriptor where Self: ~Copyable {
+    /// Default send implementation using the unsafe fd
+    func send(_ data: Data, flags: Int32 = 0) throws -> Int {
+        return try self.unsafe { fd in
+            let bytesSent = data.withUnsafeBytes { ptr in
+                Glibc.send(fd, ptr.baseAddress, ptr.count, flags)
+            }
+            if bytesSent == -1 { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
+            return bytesSent
+        }
+    }
 
-    func send(_ data: Data, flags: Int32) throws -> Int
-    func recv(count: Int, flags: Int32) throws -> Data
-
-    func shutdown(how: Int32) throws
+    /// Default recv implementation using the unsafe fd
+    func recv(count: Int, flags: Int32 = 0) throws -> Data {
+        var buffer = Data(count: count)
+        let n = try self.unsafe { fd in
+            let bytesRead = buffer.withUnsafeMutableBytes { ptr in
+                Glibc.recv(fd, ptr.baseAddress, count, flags)
+            }
+            if bytesRead == -1 { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
+            return bytesRead
+        }
+        buffer.removeSubrange(n..<buffer.count)
+        return buffer
+    }
 }
+

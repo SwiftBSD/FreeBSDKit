@@ -30,7 +30,6 @@ import FreeBSDKit
 import Glibc
 
 
-
 /// `Capability` inherits from `Descriptor`, meaning it represents a resource
 /// with a raw `Int32` descriptor that can be closed and managed safely.
 ///
@@ -44,7 +43,7 @@ import Glibc
 /// providing safe operations in addition to the universal `close()` method.
 public protocol Capability: Descriptor, ~Copyable {}
 
-extension Capability where Self: ~Copyable{
+extension Capability where Self: ~Copyable {
 
     /// Applies a set of capability rights to a given file descriptor.
     ///
