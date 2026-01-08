@@ -126,7 +126,7 @@ final class CapabilityRightSetTests: XCTestCase {
         set.add(capability: .read)
         set.add(capability: .write)
         
-        let raw = set.asBSDType()
+        let raw = set.rawBSD
         
         // Create a new set from the raw struct and check it contains same rights
         let newSet = CapabilityRightSet(rights: raw)

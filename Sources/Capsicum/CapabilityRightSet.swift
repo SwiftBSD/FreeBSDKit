@@ -32,6 +32,9 @@ import FreeBSDKit
 /// capability rights in a type-safe Swift way.
 public struct CapabilityRightSet: BSDValue, Sendable {
     public typealias RAWBSD = cap_rights_t
+    public var rawBSD: cap_rights_t {
+        return self.rights
+    }
     private var rights: RAWBSD
 
     // MARK: - Initializers
@@ -155,9 +158,5 @@ public struct CapabilityRightSet: BSDValue, Sendable {
     /// - Returns: `true` if the set is valid; otherwise, `false`.
     public mutating func validate() -> Bool {
         return ccapsicum_rights_valid(&rights)
-    }
-
-    public func asBSDType() -> RAWBSD {
-        return self.rights
     }
 }

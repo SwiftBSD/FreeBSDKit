@@ -50,7 +50,7 @@ extension Capability where Self: ~Copyable {
     /// - Parameter rights: A `CapabilityRightSet` representing the rights to permit.
     /// - Returns: `true` if the rights were successfully applied; `false` on failure.
     public func limit(rights: CapabilityRightSet) -> Bool { // TODO: throws
-        var mutableRights = rights.asBSDType()
+        var mutableRights = rights.rawBSD
         return self.unsafe { fd in return ccapsicum_cap_limit(fd, &mutableRights) == 0 }
     }
 
