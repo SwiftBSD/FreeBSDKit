@@ -95,7 +95,7 @@ public extension SocketDescriptor where Self: ~Copyable {
         }
     }
 }
-
+// TODO: Wrap these in C methods.
 // MARK: - CMSG Helpers (Swift replacements for macros)
 
 @inline(__always)

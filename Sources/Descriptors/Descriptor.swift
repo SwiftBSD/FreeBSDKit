@@ -85,6 +85,7 @@ extension Descriptor where Self: ~Copyable  {
             return st
         }
     }
+    // TODO make Swifty
     // TODO: OptionSet the flags
     public func getFlags() throws -> Int32 {
         return try self.unsafe { (fd: Int32) in
@@ -95,6 +96,7 @@ extension Descriptor where Self: ~Copyable  {
             return flags
         }
     }
+    // TODO make Swifty
     // TODO: OptionSet the flags
     public func setFlags(_ flags: Int32) throws {
         try self.unsafe { (fd: Int32) in
@@ -104,6 +106,7 @@ extension Descriptor where Self: ~Copyable  {
         }
     }
 
+    // TODO: Make Swifty
     public func setCloseOnExec(_ enabled: Bool) throws {
         try self.unsafe { (fd: Int32) in
             var flags = Glibc.fcntl(fd, F_GETFD)
@@ -116,7 +119,7 @@ extension Descriptor where Self: ~Copyable  {
             }
         }
     }
-
+    // TODO: Make Swifty
     public func getCloseOnExec() throws -> Bool {
         return try self.unsafe { (fd: Int32) in
             let flags = Glibc.fcntl(fd, F_GETFD)
