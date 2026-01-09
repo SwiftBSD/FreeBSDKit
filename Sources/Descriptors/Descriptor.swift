@@ -51,9 +51,9 @@ where RAWBSD == Int32 {
     consuming func close()
 
     func fstat() throws -> stat
-
+    // TODO: OptionSet the flags
     func getFlags() throws -> Int32
-
+    // TODO: OptionSet the flags
     func setFlags(_ flags: Int32) throws
 
     func setCloseOnExec(_ enabled: Bool) throws
@@ -85,7 +85,7 @@ extension Descriptor where Self: ~Copyable  {
             return st
         }
     }
-
+    // TODO: OptionSet the flags
     public func getFlags() throws -> Int32 {
         return try self.unsafe { (fd: Int32) in
             let flags = Glibc.fcntl(fd, F_GETFL)
@@ -95,7 +95,7 @@ extension Descriptor where Self: ~Copyable  {
             return flags
         }
     }
-
+    // TODO: OptionSet the flags
     public func setFlags(_ flags: Int32) throws {
         try self.unsafe { (fd: Int32) in
             if Glibc.fcntl(fd, F_SETFL, flags) == -1 {

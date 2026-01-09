@@ -27,31 +27,49 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-/// A generic stream descriptor (read/write)
-public protocol StreamDescriptor: ReadWriteDescriptor, ~Copyable {
-    func send(_ data: Data, flags: Int32) throws -> Int
-    func recv(count: Int, flags: Int32) throws -> Data
+import Foundation
+
+/// An OptionSet for socket flags that can be used in `recv`/`send` operations
+public struct SocketFlags: OptionSet {
+    public let rawValue: Int32
+
+    public init(rawValue: Int32) {
+        self.rawValue = rawValue
+    }
+
+    public static let oob = SocketFlags(rawValue: MSG_OOB)
+    public static let peek = SocketFlags(rawValue: MSG_PEEK)
+    public static let trunc = SocketFlags(rawValue: MSG_TRUNC)
+    public static let waitAll = SocketFlags(rawValue: MSG_WAITALL)
+    public static let dontWait = SocketFlags(rawValue: MSG_DONTWAIT)
+    public static let cmsgCloExec = SocketFlags(rawValue: MSG_CMSG_CLOEXEC)
+    public static let cmsgCloFork = SocketFlags(rawValue: MSG_CMSG_CLOFORK)
+    public static let waitForOne = SocketFlags(rawValue: MSG_WAITFORONE)
 }
 
-// TODO: 
+
+/// A generic stream descriptor (read/write)
+public protocol StreamDescriptor: ReadWriteDescriptor, ~Copyable {
+    func send(_ data: Data, flags: SocketFlags) throws -> Int
+    func recv(count: Int, flags: SocketFlags) throws -> Data
+}
+
 public extension StreamDescriptor where Self: ~Copyable {
-    /// Default send implementation using the unsafe fd
-    func send(_ data: Data, flags: Int32 = 0) throws -> Int {
+    func send(_ data: Data, flags: SocketFlags = []) throws -> Int {
         return try self.unsafe { fd in
             let bytesSent = data.withUnsafeBytes { ptr in
-                Glibc.send(fd, ptr.baseAddress, ptr.count, flags)
+                Glibc.send(fd, ptr.baseAddress, ptr.count, flags.rawValue)
             }
             if bytesSent == -1 { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
             return bytesSent
         }
     }
 
-    /// Default recv implementation using the unsafe fd
-    func recv(count: Int, flags: Int32 = 0) throws -> Data {
+    func recv(count: Int, flags: SocketFlags = []) throws -> Data {
         var buffer = Data(count: count)
         let n = try self.unsafe { fd in
             let bytesRead = buffer.withUnsafeMutableBytes { ptr in
-                Glibc.recv(fd, ptr.baseAddress, count, flags)
+                Glibc.recv(fd, ptr.baseAddress, count, flags.rawValue)
             }
             if bytesRead == -1 { throw POSIXError(POSIXErrorCode(rawValue: errno)!) }
             return bytesRead
@@ -60,4 +78,5 @@ public extension StreamDescriptor where Self: ~Copyable {
         return buffer
     }
 }
+
 

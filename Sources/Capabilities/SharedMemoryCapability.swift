@@ -28,10 +28,7 @@ import Foundation
 import Descriptors
 
 /// A shared memory capability descriptor.
-public struct SharedMemoryCapability: Capability,
-                                      SharedMemoryDescriptor,
-                                      ~Copyable
-{
+public struct SharedMemoryCapability: Capability, SharedMemoryDescriptor, ~Copyable {
     private var handle: RawCapabilityHandle
 
     public init(_ raw: Int32) {

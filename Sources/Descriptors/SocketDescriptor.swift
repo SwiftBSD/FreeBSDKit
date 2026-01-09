@@ -35,9 +35,9 @@ public protocol SocketDescriptor: StreamDescriptor, ~Copyable {
     func accept() throws -> Self
     func connect(address: UnsafePointer<sockaddr>, addrlen: socklen_t) throws
     func shutdown(how: Int32) throws
-    func send(_ data: Data, flags: Int32) throws -> Int
-    func recv(count: Int, flags: Int32) throws -> Data
+    // TODO: Convert to `OpaqueDescriptor`
     func sendDescriptors<D: StreamDescriptor>(_ descriptors: [D], payload: Data) throws
+    // TODO Return struct with enumerated values.
     func recvDescriptors(maxDescriptors: Int, bufferSize: Int) throws -> (Data, [Int32])
 }
 
@@ -52,7 +52,7 @@ public extension SocketDescriptor where Self: ~Copyable {
             }
         }
     }
-
+     // TODO: OptionSet the how
     func shutdown(how: Int32) throws {
         try self.unsafe { fd in
             guard Glibc.shutdown(fd, how) == 0 else {
@@ -60,7 +60,7 @@ public extension SocketDescriptor where Self: ~Copyable {
             }
         }
     }
-
+    // TODO: OptionSet this
     static func socket(domain: Int32, type: Int32, proto: Int32) throws -> Self {
         let rawFD = Glibc.socket(domain, type, proto)
         guard rawFD >= 0 else {
@@ -136,7 +136,8 @@ private func CMSG_DATA(_ cmsg: UnsafePointer<cmsghdr>) -> UnsafeMutableRawPointe
         .advanced(by: _CMSG_ALIGN(MemoryLayout<cmsghdr>.size))
 }
 
-// TODO: Not happy with this API.
+// TODO: Convert to `OpaqueDescriptor`
+// Should take in opaque descriptors
 public extension SocketDescriptor where Self: ~Copyable {
     func sendDescriptors<D: StreamDescriptor>(_ descriptors: [D], payload: Data) throws {
         precondition(!payload.isEmpty)

@@ -69,7 +69,7 @@ extension ProcessDescriptor where Self: ~Copyable {
             return ProcessDescriptorForkResult(descriptor: Self(fd), isChild: false)
         }
     }
-
+    // TODO
     /// Wait for the process to exit
     public func wait() throws -> Int32 {
         let pid = try self.pid()

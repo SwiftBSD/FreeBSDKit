@@ -57,6 +57,7 @@ public protocol SharedMemoryDescriptor: Descriptor, ~Copyable {
         oflag: Int32,
         mode: mode_t
     ) throws -> Self
+    // TODO: OptionSet the flags
 
     /// Unlink (remove) the shared memory object name.
     static func unlink(name: String) throws
@@ -70,15 +71,15 @@ public protocol SharedMemoryDescriptor: Descriptor, ~Copyable {
     func map(
         size: Int,
         prot: ShmProtection,
-        flags: Int32
-    ) throws -> UnsafeRawPointer
+        flags: Int32 
+    ) throws -> UnsafeRawPointer // TODO: OptionSet the flags
 
     /// Unmap a previously mapped region.
     func unmap(_ pointer: UnsafeRawPointer, size: Int) throws
 }
 
 public extension SharedMemoryDescriptor where Self: ~Copyable {
-
+    // TODO: OptionSet the flags.
     static func open(
         name: String,
         oflag: Int32,
@@ -109,11 +110,11 @@ public extension SharedMemoryDescriptor where Self: ~Copyable {
             }
         }
     }
-    // TODO: Return an enumeration that wraps the pointer type given the flags.
+    // TODO: OptionSet the flags
     func map(
         size: Int,
         prot: ShmProtection,
-        flags: Int32 = MAP_SHARED
+        flags: Int32
     ) throws -> UnsafeRawPointer {
         return try self.unsafe { fd in
             let ptr = Glibc.mmap(
