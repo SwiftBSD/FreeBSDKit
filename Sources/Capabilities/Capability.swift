@@ -40,7 +40,14 @@ import Glibc
 /// Typically, types conforming to `Capability` are more restrictive or specialized
 /// descriptors (e.g., `FileDescriptor`, `SocketDescriptor`, `KqueueDescriptor`),
 /// providing safe operations in addition to the universal `close()` method.
-public protocol Capability: Descriptor, ~Copyable {}
+public protocol Capability: Descriptor, ~Copyable {
+    func limit(rights: CapsicumRightSet) -> Bool
+    func limitStream(options: StreamLimitOptions) throws
+    func limitIoctls(commands: [IoctlCommand]) throws
+    func limitFcntls(rights: FcntlRights) throws
+    func getIoctls(maxCount: Int) throws -> [IoctlCommand]
+    func getFcntls() throws -> FcntlRights
+}
 
 public extension Capability where Self: ~Copyable {
 

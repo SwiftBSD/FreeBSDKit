@@ -94,33 +94,6 @@ public extension SocketDescriptor where Self: ~Copyable {
             }
         }
     }
-
-    func send(_ data: Data, flags: Int32) throws -> Int {
-        return try self.unsafe { fd in
-            let bytesSent = data.withUnsafeBytes { ptr in
-                Glibc.send(fd, ptr.baseAddress, ptr.count, flags)
-            }
-            if bytesSent == -1 {
-                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
-            }
-            return bytesSent
-        }
-    }
-
-    func recv(count: Int, flags: Int32) throws -> Data {
-        var buffer = Data(count: count)
-        let n = try self.unsafe { fd in
-            let bytesRead = buffer.withUnsafeMutableBytes { ptr in
-                Glibc.recv(fd, ptr.baseAddress, count, flags)
-            }
-            if bytesRead == -1 {
-                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
-            }
-            return bytesRead
-        }
-        buffer.removeSubrange(n..<buffer.count)
-        return buffer
-    }
 }
 
 // MARK: - CMSG Helpers (Swift replacements for macros)
@@ -163,11 +136,11 @@ private func CMSG_DATA(_ cmsg: UnsafePointer<cmsghdr>) -> UnsafeMutableRawPointe
         .advanced(by: _CMSG_ALIGN(MemoryLayout<cmsghdr>.size))
 }
 
+// TODO: Not happy with this API.
 public extension SocketDescriptor where Self: ~Copyable {
-
-    func sendDescriptors<D: StreamDescriptor>(_ descriptors: [D], payload: Data = Data([0])) throws {
+    func sendDescriptors<D: StreamDescriptor>(_ descriptors: [D], payload: Data) throws {
         precondition(!payload.isEmpty)
-
+        // Grab the fd
         try self.unsafe { sockFD in
             var rawFDs: [Int32] = []
             for d in descriptors {
@@ -183,7 +156,6 @@ public extension SocketDescriptor where Self: ~Copyable {
             // Send the payload and descriptors together
             try payload.withUnsafeBytes { payloadPtr in
                 try control.withUnsafeMutableBytes { ctrlPtr in
-                    // Define iovPtr correctly within scope here
                     try withUnsafeMutablePointer(to: &iov) { iovPtr in
                         var msg = msghdr(
                             msg_name: nil,

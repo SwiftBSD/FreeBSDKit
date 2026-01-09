@@ -28,9 +28,12 @@ import Foundation
 import FreeBSDKit
 
 /// A generic stream descriptor (read/write)
-public protocol StreamDescriptor: ReadWriteDescriptor, ~Copyable {}
+public protocol StreamDescriptor: ReadWriteDescriptor, ~Copyable {
+    func send(_ data: Data, flags: Int32) throws -> Int
+    func recv(count: Int, flags: Int32) throws -> Data
+}
 
-
+// TODO: 
 public extension StreamDescriptor where Self: ~Copyable {
     /// Default send implementation using the unsafe fd
     func send(_ data: Data, flags: Int32 = 0) throws -> Int {
