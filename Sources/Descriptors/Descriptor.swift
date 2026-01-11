@@ -27,104 +27,118 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-/// A protocol representing a generic BSD descriptor resource, such as a file descriptor,
-/// socket, kqueue, or process descriptor.
+// MARK: - Descriptor
+
+/// A move-only, sendable BSD descriptor.
 ///
-/// `Descriptor` extends `BSDResource` with a few properties and behaviors common to
-/// all descriptors:
-/// - They have an underlying raw BSD resource (`Int32`).
-/// - They can be closed to release the resource.
-/// - They can be sent across concurrency domains (`Sendable`).
+/// `Descriptor` represents exclusive ownership of a BSD file descriptor.
+/// Values conforming to this protocol:
 ///
-/// Conforming types should provide an initializer from the raw descriptor and implement
-/// proper cleanup via `close()`.
+/// - Are **move-only** (`~Copyable`)
+/// - Are **sendable across concurrency domains** (`Sendable`)
+/// - Must **never be accessed concurrently**
+///
+/// Ownership may be transferred between tasks, but the descriptor
+/// must not be used simultaneously by multiple tasks.
 public protocol Descriptor: BSDResource, Sendable, ~Copyable
 where RAWBSD == Int32 {
-    /// Initializes the descriptor from a raw `Int32` resource.
-    ///
-    /// - Parameter value: The raw BSD descriptor.
+
+    /// Initialize from a raw BSD file descriptor.
     init(_ value: RAWBSD)
 
-    /// Consumes the descriptor and closes/releases the underlying resource.
+    /// Consume and close the descriptor.
     ///
-    /// After calling this method, the descriptor should no longer be used.
+    /// After calling this method, the descriptor is invalid and must not be used.
     consuming func close()
 
+    /// Perform `fstat(2)` on the descriptor.
     func fstat() throws -> stat
-    // TODO: OptionSet the flags
+
+    /// Get file status flags (`fcntl(F_GETFL)`).
     func getFlags() throws -> Int32
-    // TODO: OptionSet the flags
+
+    /// Set file status flags (`fcntl(F_SETFL)`).
+    ///
+    /// This replaces the current flags.
     func setFlags(_ flags: Int32) throws
 
+    /// Enable or disable close-on-exec (`FD_CLOEXEC`).
     func setCloseOnExec(_ enabled: Bool) throws
 
+    /// Query close-on-exec state.
     func getCloseOnExec() throws -> Bool
 }
 
+// MARK: - Default Implementations
 
-extension Descriptor where Self: ~Copyable  {
-    /// Duplicate the descriptor.
+public extension Descriptor where Self: ~Copyable {
+
+    /// Duplicate the descriptor using `dup(2)`.
     ///
-    /// Returns a new descriptor referring to the same kernel resource.
-    public func duplicate() throws -> Self {
-        return try self.unsafe { (fd: Int32) in
+    /// The returned descriptor refers to the same kernel object
+    /// and has identical capability rights.
+    func duplicate() throws -> Self {
+        try self.unsafe { fd in
             let newFD = Glibc.dup(fd)
-            if newFD == -1 {
-                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+            guard newFD != -1 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
             return Self(newFD)
         }
     }
 
-    public func fstat() throws -> stat {
-        return try self.unsafe { (fd: Int32) in
+    func fstat() throws -> stat {
+        try self.unsafe { fd in
             var st = stat()
-            if Glibc.fstat(fd, &st) != 0 {
-                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+            guard Glibc.fstat(fd, &st) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
             return st
         }
     }
-    // TODO make Swifty
-    // TODO: OptionSet the flags
-    public func getFlags() throws -> Int32 {
-        return try self.unsafe { (fd: Int32) in
+
+    func getFlags() throws -> Int32 {
+        try self.unsafe { fd in
             let flags = Glibc.fcntl(fd, F_GETFL)
-            if flags == -1 {
-                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+            guard flags != -1 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
             return flags
         }
     }
-    // TODO make Swifty
-    // TODO: OptionSet the flags
-    public func setFlags(_ flags: Int32) throws {
-        try self.unsafe { (fd: Int32) in
-            if Glibc.fcntl(fd, F_SETFL, flags) == -1 {
-                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+    // TODO: Make this an optionset
+    func setFlags(_ flags: Int32) throws {
+        try self.unsafe { fd in
+            guard Glibc.fcntl(fd, F_SETFL, flags) != -1 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
         }
     }
 
-    // TODO: Make Swifty
-    public func setCloseOnExec(_ enabled: Bool) throws {
-        try self.unsafe { (fd: Int32) in
+    func setCloseOnExec(_ enabled: Bool) throws {
+        try self.unsafe { fd in
             var flags = Glibc.fcntl(fd, F_GETFD)
-            if flags == -1 {
-                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+            guard flags != -1 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
-            if enabled { flags |= FD_CLOEXEC } else { flags &= ~FD_CLOEXEC }
-            if Glibc.fcntl(fd, F_SETFD, flags) == -1 {
-                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+
+            if enabled {
+                flags |= FD_CLOEXEC
+            } else {
+                flags &= ~FD_CLOEXEC
+            }
+
+            guard Glibc.fcntl(fd, F_SETFD, flags) != -1 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
         }
     }
-    // TODO: Make Swifty
-    public func getCloseOnExec() throws -> Bool {
-        return try self.unsafe { (fd: Int32) in
+
+    func getCloseOnExec() throws -> Bool {
+        try self.unsafe { fd in
             let flags = Glibc.fcntl(fd, F_GETFD)
-            if flags == -1 {
-                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+            guard flags != -1 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
             return (flags & FD_CLOEXEC) != 0
         }
