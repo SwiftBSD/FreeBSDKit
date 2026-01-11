@@ -27,39 +27,113 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
+// MARK: - Read Result
+
+/// Result of a read operation.
+public enum ReadResult {
+    case data(Data)
+    case eof
+}
+
+// MARK: - Descriptor Capabilities
+
 public protocol ReadableDescriptor: Descriptor, ~Copyable {
-    func read(count: Int) throws -> Data
+    func read(maxBytes: Int) throws -> ReadResult
+    func readExact(_ count: Int) throws -> Data
 }
 
 public protocol WritableDescriptor: Descriptor, ~Copyable {
-    func write(_ data: Data) throws -> Int
+    func writeOnce(_ data: Data) throws -> Int
+    func writeAll(_ data: Data) throws
 }
 
 public typealias ReadWriteDescriptor = ReadableDescriptor & WritableDescriptor
 
-extension ReadableDescriptor where Self: ~Copyable {
-    public func read(count: Int) throws -> Data {
-        var buffer = Data(count: count)
+// MARK: - Read Implementations
+
+public extension ReadableDescriptor where Self: ~Copyable {
+
+    func read(maxBytes: Int) throws -> ReadResult {
+        var buffer = Data(count: maxBytes)
+
         let n = try self.unsafe { fd in
-            let bytesRead = buffer.withUnsafeMutableBytes { ptr in
-                Glibc.read(fd, ptr.baseAddress, count)
+            buffer.withUnsafeMutableBytes { ptr in
+                while true {
+                    let r = Glibc.read(fd, ptr.baseAddress, ptr.count)
+                    if r == -1 && errno == EINTR { continue }
+                    return r
+                }
             }
-            if bytesRead == -1 { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil) }
-            return bytesRead
         }
+
+        if n == -1 {
+            throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+        }
+
+        if n == 0 {
+            return .eof
+        }
+
         buffer.removeSubrange(n..<buffer.count)
-        return buffer
+        return .data(buffer)
+    }
+
+    func readExact(_ count: Int) throws -> Data {
+        var result = Data()
+        result.reserveCapacity(count)
+
+        while result.count < count {
+            switch try read(maxBytes: count - result.count) {
+            case .eof:
+                throw POSIXError(.ENOTCONN)
+            case .data(let chunk):
+                result.append(chunk)
+            }
+        }
+
+        return result
     }
 }
 
-extension WritableDescriptor where Self: ~Copyable {
-    public func write(_ data: Data) throws -> Int {
-        return try self.unsafe { fd in
-            let bytesWritten = data.withUnsafeBytes { ptr in
-                Glibc.write(fd, ptr.baseAddress, ptr.count)
+// MARK: - Write Implementations
+
+public extension WritableDescriptor where Self: ~Copyable {
+
+    func writeOnce(_ data: Data) throws -> Int {
+        try self.unsafe { fd in
+            let n = data.withUnsafeBytes { ptr in
+                while true {
+                    let r = Glibc.write(fd, ptr.baseAddress, ptr.count)
+                    if r == -1 && errno == EINTR { continue }
+                    return r
+                }
             }
-            if bytesWritten == -1 { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil) }
-            return bytesWritten
+
+            if n == -1 {
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+            }
+
+            return n
+        }
+    }
+
+    func writeAll(_ data: Data) throws {
+        try self.unsafe { fd in
+            try data.withUnsafeBytes { ptr in
+                var offset = 0
+                while offset < ptr.count {
+                    let n = Glibc.write(
+                        fd,
+                        ptr.baseAddress!.advanced(by: offset),
+                        ptr.count - offset
+                    )
+                    if n == -1 {
+                        if errno == EINTR { continue }
+                        throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+                    }
+                    offset += n
+                }
+            }
         }
     }
 }
