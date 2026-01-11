@@ -27,6 +27,8 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
+// MARK: - File Descriptor
+
 public protocol FileDescriptor: ReadWriteDescriptor, ~Copyable {
     func seek(offset: off_t, whence: Int32) throws -> off_t
     func pread(count: Int, offset: off_t) throws -> Data
@@ -35,51 +37,80 @@ public protocol FileDescriptor: ReadWriteDescriptor, ~Copyable {
     func sync() throws
 }
 
+// MARK: - Default Implementations
 
-extension FileDescriptor where Self: ~Copyable {
-    public func seek(offset: off_t, whence: Int32) throws -> off_t {
-        return try self.unsafe { fd in
-            let pos = Glibc.lseek(fd, offset, whence)
-            if pos == -1 { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil) }
-            return pos
+public extension FileDescriptor where Self: ~Copyable {
+
+    func seek(offset: off_t, whence: Int32) throws -> off_t {
+        try self.unsafe { fd in
+            while true {
+                let pos = Glibc.lseek(fd, offset, whence)
+                if pos != -1 { return pos }
+                if errno == EINTR { continue }
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+            }
         }
     }
 
-    public func pread(count: Int, offset: off_t) throws -> Data {
+    func pread(count: Int, offset: off_t) throws -> Data {
         var buffer = Data(count: count)
+
         let n = try self.unsafe { fd in
-            let bytesRead = buffer.withUnsafeMutableBytes { ptr in
-                Glibc.pread(fd, ptr.baseAddress, count, offset)
+            buffer.withUnsafeMutableBytes { ptr in
+                while true {
+                    let r = Glibc.pread(fd, ptr.baseAddress, ptr.count, offset)
+                    if r != -1 { return r }
+                    if errno == EINTR { continue }
+                    return -1
+                }
             }
-            if bytesRead == -1 { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil) }
-            return bytesRead
         }
+
+        if n == -1 {
+            throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+        }
+
         buffer.removeSubrange(n..<buffer.count)
         return buffer
     }
 
-    public func pwrite(_ data: Data, offset: off_t) throws -> Int {
-        return try self.unsafe { fd in
-            let bytesWritten = data.withUnsafeBytes { ptr in
-                Glibc.pwrite(fd, ptr.baseAddress, ptr.count, offset)
+    func pwrite(_ data: Data, offset: off_t) throws -> Int {
+        try self.unsafe { fd in
+            let n = data.withUnsafeBytes { ptr in
+                while true {
+                    let r = Glibc.pwrite(fd, ptr.baseAddress, ptr.count, offset)
+                    if r != -1 { return r }
+                    if errno == EINTR { continue }
+                    return -1
+                }
             }
-            if bytesWritten == -1 { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil) }
-            return bytesWritten
+
+            if n == -1 {
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+            }
+
+            return n
         }
     }
 
-    public func truncate(to length: off_t) throws {
+    func truncate(to length: off_t) throws {
         try self.unsafe { fd in
-            if Glibc.ftruncate(fd, length) != 0 {
-                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+            while true {
+                let r = Glibc.ftruncate(fd, length)
+                if r == 0 { return }
+                if errno == EINTR { continue }
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
         }
     }
 
-    public func sync() throws {
+    func sync() throws {
         try self.unsafe { fd in
-            if Glibc.fsync(fd) != 0 {
-                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+            while true {
+                let r = Glibc.fsync(fd)
+                if r == 0 { return }
+                if errno == EINTR { continue }
+                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
         }
     }
