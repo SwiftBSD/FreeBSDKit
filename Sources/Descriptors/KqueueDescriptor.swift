@@ -27,19 +27,22 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-/// A BSD descriptor representing a kqueue.
+// MARK: - Kqueue Descriptor
+
+/// A BSD descriptor representing a `kqueue(2)`.
 public protocol KqueueDescriptor: Descriptor, ~Copyable {
+
     /// Create a new kqueue descriptor.
     static func makeKqueue() throws -> Self
 
     /// Perform a kevent operation.
     ///
     /// - Parameters:
-    ///   - changes: Events to register (add/modify/delete).
+    ///   - changes: Events to register.
     ///   - maxEvents: Maximum number of events to return.
-    ///   - timeout: Optional timeout for waiting; `nil` waits indefinitely.
+    ///   - timeout: Optional timeout; `nil` waits indefinitely.
     ///
-    /// - Returns: A tuple of (number of returned events, array of returned kevent)
+    /// - Returns: (number of events, returned events)
     func kevent(
         changes: [kevent],
         maxEvents: Int,
@@ -47,7 +50,7 @@ public protocol KqueueDescriptor: Descriptor, ~Copyable {
     ) throws -> (Int, [kevent])
 }
 
-// The Glibc doesn't understand the difference between the struct kevent and the function call.
+// MARK: - C ABI hook
 @_silgen_name("kevent")
 func _kevent_c(
     _ kq: Int32,
@@ -58,7 +61,8 @@ func _kevent_c(
     _ timeout: UnsafePointer<timespec>?
 ) -> Int32
 
-// TODO: Refactor this.
+// MARK: - Default Implementations
+
 public extension KqueueDescriptor where Self: ~Copyable {
 
     static func makeKqueue() throws -> Self {
@@ -75,28 +79,44 @@ public extension KqueueDescriptor where Self: ~Copyable {
         timeout: TimeInterval?
     ) throws -> (Int, [kevent]) {
 
-        var events = Array<kevent>(unsafeUninitializedCapacity: maxEvents) { buf, count in
-            count = 0
-        }
+        var events = Array<kevent>(repeating: kevent(), count: maxEvents)
 
-        var ts: timespec?
+        var tsStorage: timespec?
         if let timeout = timeout {
             let sec = Int(timeout)
-            let nsec = Int((timeout - Double(sec)) * 1_000_000_000)
-            ts = timespec(tv_sec: off_t(sec), tv_nsec: nsec)
+            let frac = timeout - Double(sec)
+            let nsec = min(
+                max(Int(frac * 1_000_000_000), 0),
+                999_999_999
+            )
+            tsStorage = timespec(
+                tv_sec: time_t(sec),
+                tv_nsec: nsec
+            )
         }
 
         let count = try self.unsafe { fd in
             let result = events.withUnsafeMutableBufferPointer { evBuf in
                 changes.withUnsafeBufferPointer { chBuf in
-                    _kevent_c(
-                        fd,
-                        chBuf.baseAddress,
-                        Int32(chBuf.count),
-                        evBuf.baseAddress,
-                        Int32(maxEvents),
-                        ts != nil ? withUnsafePointer(to: &ts!) { $0 } : nil
-                    )
+                    if var ts = tsStorage {
+                        return _kevent_c(
+                            fd,
+                            chBuf.baseAddress,
+                            Int32(chBuf.count),
+                            evBuf.baseAddress,
+                            Int32(maxEvents),
+                            &ts
+                        )
+                    } else {
+                        return _kevent_c(
+                            fd,
+                            chBuf.baseAddress,
+                            Int32(chBuf.count),
+                            evBuf.baseAddress,
+                            Int32(maxEvents),
+                            nil
+                        )
+                    }
                 }
             }
 
@@ -106,7 +126,6 @@ public extension KqueueDescriptor where Self: ~Copyable {
             return Int(result)
         }
 
-        let returnedEvents = Array(events.prefix(count))
-        return (count, returnedEvents)
+        return (count, Array(events.prefix(count)))
     }
 }
