@@ -36,7 +36,7 @@ public protocol SocketDescriptor: StreamDescriptor, ~Copyable {
     func connect(address: UnsafePointer<sockaddr>, addrlen: socklen_t) throws
     func shutdown(how: Int32) throws
     func sendDescriptors(_ descriptors: [OpaqueDescriptorRef], payload: Data) throws
-    func recvDescriptors(maxDescriptors: Int, bufferSize: Int) throws -> (Data, [Int32])
+    func recvDescriptors(maxDescriptors: Int, bufferSize: Int) throws -> (Data, [OpaqueDescriptorRef])
 }
 
 // MARK: - Default implementations
@@ -206,7 +206,7 @@ public extension SocketDescriptor where Self: ~Copyable {
     func recvDescriptors(
         maxDescriptors: Int = 8,
         bufferSize: Int = 1
-    ) throws -> (Data, [Int32]) {
+    ) throws -> (Data, [OpaqueDescriptorRef]) {
 
         try self.unsafe { sockFD in
             var buffer  = [UInt8](repeating: 0, count: bufferSize)
@@ -243,7 +243,7 @@ public extension SocketDescriptor where Self: ~Copyable {
                             throw POSIXError(.EMSGSIZE)
                         }
 
-                        var receivedFDs: [Int32] = []
+                        var receivedFDs: [OpaqueDescriptorRef] = []
 
                         var cmsg = CMSG_FIRSTHDR(&msg)
                         while let hdr = cmsg {
@@ -258,7 +258,7 @@ public extension SocketDescriptor where Self: ~Copyable {
                                     CMSG_DATA(hdr).assumingMemoryBound(to: Int32.self)
 
                                 for i in 0..<count {
-                                    receivedFDs.append(dataPtr[i])
+                                    receivedFDs.append(OpaqueDescriptorRef(dataPtr[i]))
                                 }
                             }
                             cmsg = CMSG_NXTHDR(&msg, hdr)

@@ -161,4 +161,8 @@ public extension Descriptor where Self: ~Copyable {
             }
         }
     }
+
+    consuming func toOpaqueRef() -> OpaqueDescriptorRef {
+        fatalError()
+    }
 }

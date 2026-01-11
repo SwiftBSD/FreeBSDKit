@@ -30,7 +30,9 @@ import FreeBSDKit
 public struct DescriptorSet: Sendable {
     private var descriptors: [OpaqueDescriptorRef] = []
 
-    public init() {}
+    public init(_ desc: [OpaqueDescriptorRef]) {
+        self.descriptors = desc
+    }
 
     public
     mutating func insert<D: Descriptor>(kind: DescriptorKind, _ desc: consuming D) {
