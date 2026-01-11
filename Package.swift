@@ -69,12 +69,16 @@ let package = Package(
             path: "Sources/CProcessDescriptor"
         ),
         .target(
+            name: "CJails",
+            path: "Sources/CJails"
+        ),
+        .target(
             name: "CEventDescriptor",
             path: "Sources/CEventDescriptor"
         ),
         .target(
             name: "Descriptors",
-            dependencies: ["Capsicum", "CProcessDescriptor", "CEventDescriptor"]
+            dependencies: ["Capsicum", "CProcessDescriptor", "CEventDescriptor", "CJails"]
         ),
         .testTarget(
             name: "DescriptorsTests",
