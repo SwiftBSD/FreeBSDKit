@@ -22,6 +22,10 @@ let package = Package(
             name: "Descriptors",
             targets: ["Descriptors"]
         ),
+        .library(
+            name: "SignalDispatchers",
+            targets: ["SignalDispatchers"]
+        ),
         .executable(
             name: "testtool",
             targets: ["TestTool"]
@@ -78,6 +82,10 @@ let package = Package(
         .target(
             name: "Capabilities",
             dependencies: ["Capsicum", "CProcessDescriptor", "Descriptors"]
+        ),
+        .target(
+            name: "SignalDispatchers",
+            dependencies: ["Descriptors", "FreeBSDKit"]
         ),
         .executableTarget(
             name: "TestTool",

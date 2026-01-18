@@ -19,8 +19,6 @@ public protocol InotifyDescriptor: Descriptor, ~Copyable {
     func readEvents(maxBytes: Int) throws -> [InotifyEvent]
 }
 
-// MARK: - Default Implementations
-
 public extension InotifyDescriptor where Self: ~Copyable {
 
     func addWatch(

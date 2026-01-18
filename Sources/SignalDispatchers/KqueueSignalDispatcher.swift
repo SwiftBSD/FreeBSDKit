@@ -1,6 +1,7 @@
-import Glibc
+import Descriptors
 import Foundation
 import FreeBSDKit
+import Glibc
 
 public struct KqueueSignalDispatcher<KQ: KqueueDescriptor & ~Copyable>: ~Copyable {
 
@@ -32,7 +33,7 @@ public struct KqueueSignalDispatcher<KQ: KqueueDescriptor & ~Copyable>: ~Copyabl
         handlers[signal, default: []].append(handler)
     }
 
-    // MARK: Dispatch Loop
+    // MARK: Dispatch Loop. Never returns
 
     public mutating func run(maxEvents: Int = 8) async throws {
         while true {
@@ -47,8 +48,6 @@ public struct KqueueSignalDispatcher<KQ: KqueueDescriptor & ~Copyable>: ~Copyabl
             }
         }
     }
-
-    // MARK: Drain kqueue (internal)
 
     private func drain(maxEvents: Int) async throws -> [BSDSignal] {
         try await withCheckedThrowingContinuation { cont in

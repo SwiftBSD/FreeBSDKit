@@ -27,8 +27,6 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-// MARK: - File Descriptor
-
 public protocol FileDescriptor: ReadWriteDescriptor, ~Copyable {
     func seek(offset: off_t, whence: Int32) throws -> off_t
     func pread(count: Int, offset: off_t) throws -> Data
@@ -36,8 +34,6 @@ public protocol FileDescriptor: ReadWriteDescriptor, ~Copyable {
     func truncate(to length: off_t) throws
     func sync() throws
 }
-
-// MARK: - Default Implementations
 
 public extension FileDescriptor where Self: ~Copyable {
 

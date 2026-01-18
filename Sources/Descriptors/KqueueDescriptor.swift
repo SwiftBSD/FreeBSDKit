@@ -52,7 +52,7 @@ public protocol KqueueDescriptor: Descriptor, ~Copyable {
 
 // MARK: - C ABI hook
 @_silgen_name("kevent")
-func _kevent_c(
+public func _kevent_c(
     _ kq: Int32,
     _ changelist: UnsafePointer<kevent>?,
     _ nchanges: Int32,

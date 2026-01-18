@@ -56,7 +56,6 @@ public protocol EventDescriptor: Descriptor, ~Copyable {
 public extension EventDescriptor where Self: ~Copyable {
 
     static func eventfd(initValue: UInt32, flags: EventFDFlags) throws -> Self {
-        // Call shim C function
         let fd = CEventDescriptor.eventfd(initValue, flags.rawValue)
         guard fd >= 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno)!)
@@ -66,7 +65,6 @@ public extension EventDescriptor where Self: ~Copyable {
 
     func write(_ value: UInt64) throws {
         try self.unsafe { fd in
-            // Use shim writer
             guard eventfd_write(fd, value) == 0 else {
                 throw POSIXError(POSIXErrorCode(rawValue: errno)!)
             }
