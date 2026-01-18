@@ -119,9 +119,6 @@ Expect APIs in these modules to change.
   - Jail-based tests
   - Descriptor lifecycle validation
 
-- **Additional FreeBSD subsystems**
-  - Jails
-
 ---
 
 ## Non-Goals

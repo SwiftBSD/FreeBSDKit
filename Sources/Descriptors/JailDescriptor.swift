@@ -4,25 +4,12 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * ARE DISCLAIMED.
  */
- 
+
 import CJails
 import Glibc
 import Foundation
@@ -34,53 +21,41 @@ public struct JailSetFlags: OptionSet {
     public let rawValue: Int32
     public init(rawValue: Int32) { self.rawValue = rawValue }
 
-    public static let create     = JailSetFlags(rawValue: JAIL_CREATE)
-    public static let update     = JailSetFlags(rawValue: JAIL_UPDATE)
-    public static let attach     = JailSetFlags(rawValue: JAIL_ATTACH)
+    public static let create  = JailSetFlags(rawValue: JAIL_CREATE)
+    public static let update  = JailSetFlags(rawValue: JAIL_UPDATE)
+    public static let attach  = JailSetFlags(rawValue: JAIL_ATTACH)
 
-    public static let useDesc    = JailSetFlags(rawValue: JAIL_USE_DESC)
-    public static let atDesc     = JailSetFlags(rawValue: JAIL_AT_DESC)
-
-    public static let getDesc    = JailSetFlags(rawValue: JAIL_GET_DESC)
-    public static let ownDesc    = JailSetFlags(rawValue: JAIL_OWN_DESC)
+    public static let useDesc = JailSetFlags(rawValue: JAIL_USE_DESC)
+    public static let atDesc  = JailSetFlags(rawValue: JAIL_AT_DESC)
+    public static let getDesc = JailSetFlags(rawValue: JAIL_GET_DESC)
+    public static let ownDesc = JailSetFlags(rawValue: JAIL_OWN_DESC)
 }
 
 public struct JailGetFlags: OptionSet {
     public let rawValue: Int32
     public init(rawValue: Int32) { self.rawValue = rawValue }
 
-    public static let dying      = JailGetFlags(rawValue: JAIL_DYING)
-    public static let useDesc    = JailGetFlags(rawValue: JAIL_USE_DESC)
-    public static let atDesc     = JailGetFlags(rawValue: JAIL_AT_DESC)
-    public static let getDesc    = JailGetFlags(rawValue: JAIL_GET_DESC)
-    public static let ownDesc    = JailGetFlags(rawValue: JAIL_OWN_DESC)
+    public static let dying   = JailGetFlags(rawValue: JAIL_DYING)
+    public static let useDesc = JailGetFlags(rawValue: JAIL_USE_DESC)
+    public static let atDesc  = JailGetFlags(rawValue: JAIL_AT_DESC)
+    public static let getDesc = JailGetFlags(rawValue: JAIL_GET_DESC)
+    public static let ownDesc = JailGetFlags(rawValue: JAIL_OWN_DESC)
 }
 
 // MARK: - Jail Descriptor Protocol
 
-/// A descriptor representing a FreeBSD jail.
-///
-/// This is a *capability handle* to a jail. Once obtained, no JID is required.
+/// A capability handle to a FreeBSD jail.
 public protocol JailDescriptor: Descriptor, ~Copyable {
-
-    /// Attach the current process to the jail.
     func attach() throws
-
-    /// Remove the jail.
-    ///
-    /// For owning descriptors this is optional; closing the descriptor
-    /// will implicitly remove the jail.
     func remove() throws
 }
-
-// MARK: - Default Implementations
 
 public extension JailDescriptor where Self: ~Copyable {
 
     func attach() throws {
         try self.unsafe { fd in
             guard jail_attach_jd(fd) == 0 else {
-                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+                throw POSIXError(.init(rawValue: errno)!)
             }
         }
     }
@@ -88,7 +63,7 @@ public extension JailDescriptor where Self: ~Copyable {
     func remove() throws {
         try self.unsafe { fd in
             guard jail_remove_jd(fd) == 0 else {
-                throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+                throw POSIXError(.init(rawValue: errno)!)
             }
         }
     }
@@ -96,7 +71,6 @@ public extension JailDescriptor where Self: ~Copyable {
 
 // MARK: - Concrete Jail Descriptor
 
-/// Concrete jail descriptor.
 public struct SystemJailDescriptor: JailDescriptor, ~Copyable {
 
     public typealias RAWBSD = Int32
@@ -117,67 +91,154 @@ public struct SystemJailDescriptor: JailDescriptor, ~Copyable {
         return fd
     }
 
-    public func unsafe<R>(_ block: (Int32) throws -> R) rethrows -> R where R: ~Copyable {
+    public func unsafe<R>(
+        _ block: (Int32) throws -> R
+    ) rethrows -> R where R: ~Copyable {
         try block(fd)
     }
 }
 
-// MARK: - Jail Creation / Lookup
+// MARK: - Safe Jail IOVec Builder
+
+/// Safe builder for `jail_set` / `jail_get` iovecs.
+///
+/// All pointer unsafety is contained inside this type.
+public struct JailIOVector {
+
+    fileprivate var iovecs: [iovec] = []
+    fileprivate var backing: [Any] = []
+
+    public init() {}
+
+    /// Add a C-string parameter.
+    public mutating func addCString(
+        _ name: String,
+        value: String
+    ) {
+        let key = strdup(name)
+        let val = strdup(value)
+
+        backing.append(key!)
+        backing.append(val!)
+
+        let keyVec = iovec(
+            iov_base: UnsafeMutableRawPointer(key),
+            iov_len: name.utf8.count + 1
+        )
+
+        let valueVec = iovec(
+            iov_base: UnsafeMutableRawPointer(val),
+            iov_len: value.utf8.count + 1
+        )
+
+        iovecs.append(keyVec)
+        iovecs.append(valueVec)
+    }
+}
+
+public extension JailIOVector {
+
+    mutating func addInt32(_ name: String, _ value: Int32) {
+        addRaw(name: name, value: value)
+    }
+
+    mutating func addUInt32(_ name: String, _ value: UInt32) {
+        addRaw(name: name, value: value)
+    }
+
+    mutating func addInt64(_ name: String, _ value: Int64) {
+        addRaw(name: name, value: value)
+    }
+
+    mutating func addBool(_ name: String, _ value: Bool) {
+        let v: Int32 = value ? 1 : 0
+        addRaw(name: name, value: v)
+    }
+
+    // MARK: - Internal raw helper (the only unsafe part)
+
+    private mutating func addRaw<T>(
+        name: String,
+        value: T
+    ) {
+        precondition(MemoryLayout<T>.stride == MemoryLayout<T>.size,
+                     "Type must be POD")
+
+        let key = strdup(name)!
+        let val = UnsafeMutablePointer<T>.allocate(capacity: 1)
+        val.initialize(to: value)
+
+        backing.append(key)
+        backing.append(val)
+
+        let keyVec = iovec(
+            iov_base: UnsafeMutableRawPointer(key),
+            iov_len: name.utf8.count + 1
+        )
+
+        let valueVec = iovec(
+            iov_base: UnsafeMutableRawPointer(val),
+            iov_len: MemoryLayout<T>.size
+        )
+
+        iovecs.append(keyVec)
+        iovecs.append(valueVec)
+    }
+}
+
+
+// MARK: - Jail Operations
 
 public enum Jail {
 
     /// Create or update a jail and return a descriptor.
-    ///
-    /// You must supply an iovec describing jail parameters.
-    /// The descriptor returned may be owning or borrowed depending on flags.
     public static func set(
-        iov: UnsafeMutablePointer<iovec>,
-        count: Int,
+        iov: inout JailIOVector,
         flags: JailSetFlags
     ) throws -> SystemJailDescriptor {
 
-        let jid = jail_set(iov, UInt32(count), flags.rawValue)
-        guard jid >= 0 else {
-            throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+        let jid = iov.iovecs.withUnsafeMutableBufferPointer { buf in
+            jail_set(buf.baseAddress, UInt32(buf.count), flags.rawValue)
         }
 
-        // Kernel writes descriptor into `desc` iovec entry
-        // Caller is responsible for including it.
-        let descFD = extractDescFD(from: iov, count: count)
-        return SystemJailDescriptor(descFD)
+        guard jid >= 0 else {
+            throw POSIXError(.init(rawValue: errno)!)
+        }
+
+        let fd = extractDescFD(from: &iov.iovecs)
+        return SystemJailDescriptor(fd)
     }
 
     /// Lookup a jail and return a descriptor.
     public static func get(
-        iov: UnsafeMutablePointer<iovec>,
-        count: Int,
+        iov: inout JailIOVector,
         flags: JailGetFlags
     ) throws -> SystemJailDescriptor {
 
-        let jid = jail_get(iov, UInt32(count), flags.rawValue)
-        guard jid >= 0 else {
-            throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+        let jid = iov.iovecs.withUnsafeMutableBufferPointer { buf in
+            jail_get(buf.baseAddress, UInt32(buf.count), flags.rawValue)
         }
 
-        let descFD = extractDescFD(from: iov, count: count)
-        return SystemJailDescriptor(descFD)
+        guard jid >= 0 else {
+            throw POSIXError(.init(rawValue: errno)!)
+        }
+
+        let fd = extractDescFD(from: &iov.iovecs)
+        return SystemJailDescriptor(fd)
     }
 
-    // MARK: - Helper
+    // MARK: - Descriptor Extraction (contained unsafety)
 
     private static func extractDescFD(
-        from iov: UnsafeMutablePointer<iovec>,
-        count: Int
+        from iovecs: inout [iovec]
     ) -> Int32 {
+        for entry in iovecs {
+            guard entry.iov_len == MemoryLayout<Int32>.size,
+                  let base = entry.iov_base else { continue }
 
-        for i in 0..<count {
-            let entry = iov.advanced(by: i).pointee
-            if let base = entry.iov_base,
-               entry.iov_len == MemoryLayout<Int32>.size {
-
-                return base.assumingMemoryBound(to: Int32.self).pointee
-            }
+            return base.load(as: Int32.self)
         }
+
         fatalError("jail descriptor not returned by kernel")
     }
 }

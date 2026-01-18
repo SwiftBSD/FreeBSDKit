@@ -35,10 +35,6 @@ let package = Package(
         .target(
             name: "FreeBSDKit"
         ),
-        // .testTarget(
-        //     name: "FreeBSDKitTests",
-        //     dependencies: ["FreeBSDKit"]
-        // ),
         .target(
             name: "CCapsicum",
             path: "Sources/CCapsicum"
@@ -46,14 +42,6 @@ let package = Package(
         .target(
             name: "Capsicum",
             dependencies: ["CCapsicum", "FreeBSDKit"]
-        ),
-        .testTarget(
-            name: "CapsicumTests",
-            dependencies: ["Capsicum"]
-        ),
-        .testTarget(
-            name: "CCapsicumTests",
-            dependencies: ["CCapsicum"]
         ),
         .target(
             name: "CProcessDescriptor",
@@ -75,10 +63,6 @@ let package = Package(
             name: "Descriptors",
             dependencies: ["Capsicum", "CProcessDescriptor", "CEventDescriptor", "CJails", "CINotify"]
         ),
-        // .testTarget(
-        //     name: "DescriptorsTests",
-        //     dependencies: ["Capsicum", "CProcessDescriptor", "Descriptors"]
-        // ),
         .target(
             name: "Capabilities",
             dependencies: ["Capsicum", "CProcessDescriptor", "Descriptors"]
@@ -87,6 +71,22 @@ let package = Package(
             name: "SignalDispatchers",
             dependencies: ["Descriptors", "FreeBSDKit"]
         ),
+        .testTarget(
+            name: "CapsicumTests",
+            dependencies: ["Capsicum"]
+        ),
+        .testTarget(
+            name: "CCapsicumTests",
+            dependencies: ["CCapsicum"]
+        ),
+        // .testTarget(
+        //     name: "DescriptorsTests",
+        //     dependencies: ["Capsicum", "CProcessDescriptor", "Descriptors"]
+        // ),
+        // .testTarget(
+        //     name: "FreeBSDKitTests",
+        //     dependencies: ["FreeBSDKit"]
+        // ),
         .executableTarget(
             name: "TestTool",
             dependencies: ["Capsicum", "Descriptors"]
