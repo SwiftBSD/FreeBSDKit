@@ -52,7 +52,7 @@ public struct SystemJailDescriptor: JailDescriptor, ~Copyable {
     public typealias RAWBSD = Int32
     private var fd: Int32
 
-    public init(_ value: Int32) {
+    public init(_ value: RAWBSD) {
         self.fd = value
     }
 
@@ -63,12 +63,12 @@ public struct SystemJailDescriptor: JailDescriptor, ~Copyable {
         }
     }
 
-    consuming public func take() -> Int32 {
+    consuming public func take() -> RAWBSD {
         return fd
     }
 
     public func unsafe<R>(
-        _ block: (Int32) throws -> R
+        _ block: (RAWBSD) throws -> R
     ) rethrows -> R where R: ~Copyable {
         try block(fd)
     }
@@ -117,12 +117,12 @@ public enum Jail {
 
     private static func extractDescFD(
         from iovecs: inout [iovec]
-    ) -> Int32 {
+    ) -> RawDesc {
         for entry in iovecs {
-            guard entry.iov_len == MemoryLayout<Int32>.size,
+            guard entry.iov_len == MemoryLayout<RawDesc>.size,
                   let base = entry.iov_base else { continue }
 
-            return base.load(as: Int32.self)
+            return base.load(as: RawDesc.self)
         }
 
         fatalError("jail descriptor not returned by kernel")

@@ -29,6 +29,8 @@ import FreeBSDKit
 
 // MARK: - File Status Flags
 
+public typealias RawDesc = Int32
+
 /// File status flags used with `fcntl(F_GETFL)` / `fcntl(F_SETFL)`.
 ///
 /// This maps directly to the POSIX `O_*` flags.
