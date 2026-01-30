@@ -161,8 +161,8 @@ public extension Descriptor where Self: ~Copyable {
             }
         }
     }
-
+    // TODO: Have each type return the descriptor with kind set.
     consuming func toOpaqueRef() -> OpaqueDescriptorRef {
-        fatalError()
+        OpaqueDescriptorRef(self.take())
     }
 }
