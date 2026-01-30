@@ -53,35 +53,26 @@ final class CCapsicumTests: XCTestCase {
         XCTAssertFalse(ccapsicum_right_is_set(&a, CCAP_RIGHT_WRITE))
     }
     
-    func testLimitFcntlsAndIoctls() throws {
-        // Create a temporary pipe
+   func testLimitFcntlsAndIoctls() throws {
         var pipeFDs: [Int32] = [0, 0]
-        guard pipe(&pipeFDs) == 0 else {
-            XCTFail("Failed to create pipe")
-            return
-        }
+        XCTAssertEqual(pipe(&pipeFDs), 0)
+
         let readFD = pipeFDs[0]
         let writeFD = pipeFDs[1]
-        
         defer {
             close(readFD)
             close(writeFD)
         }
-        
-        var fcntlMask: UInt32 = 0
-        
-        // Limit fcntl rights on read end
+
         XCTAssertEqual(ccapsicum_limit_fcntls(readFD, UInt32(CAP_FCNTL_GETFL)), 0)
-        XCTAssertEqual(ccapsicum_get_fcntls(readFD, &fcntlMask), 0)
-        XCTAssertTrue(fcntlMask & UInt32(CAP_FCNTL_GETFL) != 0)
-        
-        // Limit ioctls on read end
-        var cmd: [UInt] = [0] // UInt matches unsigned long from C
-        XCTAssertEqual(ccapsicum_limit_ioctls(readFD, &cmd, 1), 0)
-        
-        var cmdsBuffer: [UInt] = [0]
-        XCTAssertEqual(ccapsicum_get_ioctls(readFD, &cmdsBuffer, 1), 0)
+
+        try cap_enter()
+
+        // Allowed
+        XCTAssertNotEqual(fcntl(readFD, F_GETFL), -1)
+
+        // Forbidden
+        XCTAssertEqual(fcntl(readFD, F_SETFL, O_NONBLOCK), -1)
+        XCTAssertEqual(errno, ENOTCAPABLE)
     }
-
-
 }

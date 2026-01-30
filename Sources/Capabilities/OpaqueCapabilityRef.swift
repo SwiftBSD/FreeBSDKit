@@ -23,8 +23,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-
-
 import Glibc
 import Foundation
 import Descriptors

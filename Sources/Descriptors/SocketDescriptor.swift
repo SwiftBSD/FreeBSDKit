@@ -283,7 +283,6 @@ public extension SocketDescriptor where Self: ~Copyable {
 }
 
 public extension SocketDescriptor {
-
     static func socketPair(
         domain: Int32,
         type: Int32,
