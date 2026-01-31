@@ -27,7 +27,7 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
-
+// TODO: Rework this to not expose the RawSocketTypes
 public protocol SocketDescriptor: StreamDescriptor, ~Copyable {
     static func socket(domain: Int32, type: Int32, proto: Int32) throws -> Self
     func bind(address: UnsafePointer<sockaddr>, addrlen: socklen_t) throws
@@ -148,7 +148,7 @@ public extension SocketDescriptor where Self: ~Copyable {
         precondition(!payload.isEmpty)
 
         try self.unsafe { sockFD in
-            var rawFDs: [Int32] = []
+            var rawFDs: [RawDesc] = []
             rawFDs.reserveCapacity(descriptors.count)
 
             for d in descriptors {
@@ -157,7 +157,7 @@ public extension SocketDescriptor where Self: ~Copyable {
                 }
             }
 
-            let controlLen = CMSG_SPACE(rawFDs.count * MemoryLayout<Int32>.size)
+            let controlLen = CMSG_SPACE(rawFDs.count * MemoryLayout<RawDesc>.size)
             var control = [UInt8](repeating: 0, count: controlLen)
 
             try payload.withUnsafeBytes { payloadPtr in
@@ -185,9 +185,9 @@ public extension SocketDescriptor where Self: ~Copyable {
                         cmsg.pointee.cmsg_level = SOL_SOCKET
                         cmsg.pointee.cmsg_type  = SCM_RIGHTS
                         cmsg.pointee.cmsg_len   =
-                            socklen_t(CMSG_LEN(rawFDs.count * MemoryLayout<Int32>.size))
+                            socklen_t(CMSG_LEN(rawFDs.count * MemoryLayout<RawDesc>.size))
 
-                        let dataPtr = CMSG_DATA(cmsg).assumingMemoryBound(to: Int32.self)
+                        let dataPtr = CMSG_DATA(cmsg).assumingMemoryBound(to: RawDesc.self)
                         for (i, fd) in rawFDs.enumerated() {
                             dataPtr[i] = fd
                         }
@@ -212,7 +212,7 @@ public extension SocketDescriptor where Self: ~Copyable {
             var buffer  = [UInt8](repeating: 0, count: bufferSize)
             var control = [UInt8](
                 repeating: 0,
-                count: CMSG_SPACE(maxDescriptors * MemoryLayout<Int32>.size)
+                count: CMSG_SPACE(maxDescriptors * MemoryLayout<RawDesc>.size)
             )
 
             return try buffer.withUnsafeMutableBytes { bufPtr in
@@ -253,7 +253,7 @@ public extension SocketDescriptor where Self: ~Copyable {
                                 let dataLen =
                                     Int(hdr.pointee.cmsg_len) - CMSG_LEN(0)
 
-                                let count = dataLen / MemoryLayout<Int32>.size
+                                let count = dataLen / MemoryLayout<RawDesc>.size
                                 let dataPtr =
                                     CMSG_DATA(hdr).assumingMemoryBound(to: Int32.self)
 

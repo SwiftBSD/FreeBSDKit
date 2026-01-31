@@ -26,92 +26,163 @@
 import CJails
 import Glibc
 
-// Safe builder for `jail_set` / `jail_get` iovecs.
+/// A safe builder for `iovec` arrays used with `jail_set(2)` and `jail_get(2)`.
 ///
-/// All pointer unsafety is contained inside this type.
-/// 
-/// 
+/// `JailIOVector` constructs a sequence of key/value `iovec` pairs suitable for
+/// passing to the FreeBSD jail system calls. Each parameter is represented as
+/// two consecutive `iovec` entries: a NUL-terminated parameter name followed by
+/// its value.
+///
+/// The builder owns all backing storage for the duration of its lifetime and
+/// guarantees that all pointers remain valid while the instance is alive.
+///
+/// - Important: Callers must not retain pointers obtained from `iovecs` beyond
+///   the lifetime of this object.
+/// - Note: This type is not thread-safe.
+/// - SeeAlso: `jail_set(2)`, `jail_get(2)`
+public final class JailIOVector {
 
+    /// The constructed `iovec` array.
+    ///
+    /// The array always contains an even number of elements and is ordered as:
+    ///
+    /// ```
+    /// [name, value, name, value, ...]
+    /// ```
+    ///
+    /// The contents are intended to be passed directly to `jail_set(2)` or
+    /// `jail_get(2)`.
+    public private(set) var iovecs: [iovec] = []
 
-public struct JailIOVector {
+    private var storage: [UnsafeMutableRawPointer] = []
 
-    public var iovecs: [iovec] = []
-    fileprivate var backing: [Any] = []
-
+    /// Creates an empty jail I/O vector builder.
     public init() {}
 
-    /// Add a C-string parameter.
-    public mutating func addCString(
+    deinit {
+        for ptr in storage {
+            free(ptr)
+        }
+    }
+
+    /// Adds a string-valued jail parameter.
+    ///
+    /// The parameter name and value are encoded as NUL-terminated C strings.
+    ///
+    /// - Parameters:
+    ///   - name: The jail parameter name.
+    ///   - value: The string value to associate with the parameter.
+    ///
+    /// - SeeAlso: `jail_set(2)`
+    public func addCString(
         _ name: String,
         value: String
     ) {
-        let key = strdup(name)
-        let val = strdup(value)
+        let key = strdup(name)!
+        let val = strdup(value)!
 
-        backing.append(key!)
-        backing.append(val!)
+        storage.append(UnsafeMutableRawPointer(key))
+        storage.append(UnsafeMutableRawPointer(val))
 
-        let keyVec = iovec(
-            iov_base: UnsafeMutableRawPointer(key),
-            iov_len: name.utf8.count + 1
+        appendPair(
+            key: UnsafeMutableRawPointer(key),
+            keyLen: strlen(key) + 1,
+            value: UnsafeMutableRawPointer(val),
+            valueLen: strlen(val) + 1
         )
-
-        let valueVec = iovec(
-            iov_base: UnsafeMutableRawPointer(val),
-            iov_len: value.utf8.count + 1
-        )
-
-        iovecs.append(keyVec)
-        iovecs.append(valueVec)
-    }
-}
-
-public extension JailIOVector {
-
-    mutating func addInt32(_ name: String, _ value: Int32) {
-        addRaw(name: name, value: value)
     }
 
-    mutating func addUInt32(_ name: String, _ value: UInt32) {
-        addRaw(name: name, value: value)
+    /// Adds a 32-bit signed integer jail parameter.
+    ///
+    /// - Parameters:
+    ///   - name: The jail parameter name.
+    ///   - value: The `Int32` value to associate with the parameter.
+    public func addInt32(_ name: String, _ value: Int32) {
+        addScalar(name: name, value: value)
     }
 
-    mutating func addInt64(_ name: String, _ value: Int64) {
-        addRaw(name: name, value: value)
+    /// Adds a 32-bit unsigned integer jail parameter.
+    ///
+    /// - Parameters:
+    ///   - name: The jail parameter name.
+    ///   - value: The `UInt32` value to associate with the parameter.
+    public func addUInt32(_ name: String, _ value: UInt32) {
+        addScalar(name: name, value: value)
     }
 
-    mutating func addBool(_ name: String, _ value: Bool) {
+    /// Adds a 64-bit signed integer jail parameter.
+    ///
+    /// - Parameters:
+    ///   - name: The jail parameter name.
+    ///   - value: The `Int64` value to associate with the parameter.
+    public func addInt64(_ name: String, _ value: Int64) {
+        addScalar(name: name, value: value)
+    }
+
+    /// Adds a Boolean jail parameter.
+    ///
+    /// The value is encoded as an `Int32` with `1` representing `true` and `0`
+    /// representing `false`, matching the jail ABI.
+    ///
+    /// - Parameters:
+    ///   - name: The jail parameter name.
+    ///   - value: The Boolean value to associate with the parameter.
+    public func addBool(_ name: String, _ value: Bool) {
         let v: Int32 = value ? 1 : 0
-        addRaw(name: name, value: v)
+        addScalar(name: name, value: v)
     }
 
-    // MARK: - Internal raw helper (the only unsafe part)
+    /// Executes a closure with mutable access to the underlying `iovec` buffer.
+    ///
+    /// This method provides scoped mutable access required to invoke
+    /// `jail_set(2)` or `jail_get(2)` while preserving encapsulation of the
+    /// internal storage.
+    ///
+    /// - Parameter body: A closure that receives a mutable buffer pointer to the
+    ///   `iovec` array.
+    /// - Returns: The value returned by `body`.
+    ///
+    /// - Important: Pointers obtained within `body` must not escape the closure.
+    public func withUnsafeMutableIOVecs<R>(
+        _ body: (inout UnsafeMutableBufferPointer<iovec>) throws -> R
+    ) rethrows -> R {
+        try iovecs.withUnsafeMutableBufferPointer(body)
+    }
 
-    private mutating func addRaw<T>(
+    private func addScalar<T>(
         name: String,
         value: T
-    ) {
-        precondition(MemoryLayout<T>.stride == MemoryLayout<T>.size,
-                     "Type must be POD")
+    ) where T: FixedWidthInteger {
 
         let key = strdup(name)!
-        let val = UnsafeMutablePointer<T>.allocate(capacity: 1)
-        val.initialize(to: value)
+        let val = malloc(MemoryLayout<T>.size)!
 
-        backing.append(key)
-        backing.append(val)
+        val.assumingMemoryBound(to: T.self).pointee = value
 
-        let keyVec = iovec(
-            iov_base: UnsafeMutableRawPointer(key),
-            iov_len: name.utf8.count + 1
+        storage.append(UnsafeMutableRawPointer(key))
+        storage.append(val)
+
+        appendPair(
+            key: UnsafeMutableRawPointer(key),
+            keyLen: strlen(key) + 1,
+            value: val,
+            valueLen: MemoryLayout<T>.size
         )
+    }
 
-        let valueVec = iovec(
-            iov_base: UnsafeMutableRawPointer(val),
-            iov_len: MemoryLayout<T>.size
+    @inline(__always)
+    private func appendPair(
+        key: UnsafeMutableRawPointer,
+        keyLen: Int,
+        value: UnsafeMutableRawPointer,
+        valueLen: Int
+    ) {
+        iovecs.append(iovec(iov_base: key, iov_len: keyLen))
+        iovecs.append(iovec(iov_base: value, iov_len: valueLen))
+
+        assert(
+            iovecs.count % 2 == 0,
+            "iovecs must contain key/value pairs"
         )
-
-        iovecs.append(keyVec)
-        iovecs.append(valueVec)
     }
 }

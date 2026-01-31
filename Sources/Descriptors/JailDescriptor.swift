@@ -24,6 +24,10 @@ import FreeBSDKit
 public protocol JailDescriptor: Descriptor, ~Copyable {
     func attach() throws
     func remove() throws
+    static 
+    func set(iov: inout JailIOVector, flags: JailSetFlags) throws -> Self
+    static
+    func get(iov: inout JailIOVector, flags: JailGetFlags) throws -> Self
 }
 
 public extension JailDescriptor where Self: ~Copyable {
@@ -49,8 +53,8 @@ public extension JailDescriptor where Self: ~Copyable {
 
 public struct SystemJailDescriptor: JailDescriptor, ~Copyable {
 
-    public typealias RAWBSD = Int32
-    private var fd: Int32
+    public typealias RAWBSD = RawDesc
+    private var fd: RawDesc
 
     public init(_ value: RAWBSD) {
         self.fd = value
@@ -72,30 +76,6 @@ public struct SystemJailDescriptor: JailDescriptor, ~Copyable {
     ) rethrows -> R where R: ~Copyable {
         try block(fd)
     }
-}
-
-
-// MARK: - Jail Operations
-
-public enum Jail {
-
-    /// Create or update a jail and return a descriptor.
-    public static func set(
-        iov: inout JailIOVector,
-        flags: JailSetFlags
-    ) throws -> SystemJailDescriptor {
-
-        let jid = iov.iovecs.withUnsafeMutableBufferPointer { buf in
-            jail_set(buf.baseAddress, UInt32(buf.count), flags.rawValue)
-        }
-
-        guard jid >= 0 else {
-            throw POSIXError(.init(rawValue: errno)!)
-        }
-
-        let fd = extractDescFD(from: &iov.iovecs)
-        return SystemJailDescriptor(fd)
-    }
 
     /// Lookup a jail and return a descriptor.
     public static func get(
@@ -103,7 +83,7 @@ public enum Jail {
         flags: JailGetFlags
     ) throws -> SystemJailDescriptor {
 
-        let jid = iov.iovecs.withUnsafeMutableBufferPointer { buf in
+        let jid = iov.withUnsafeMutableIOVecs { buf in
             jail_get(buf.baseAddress, UInt32(buf.count), flags.rawValue)
         }
 
@@ -111,20 +91,49 @@ public enum Jail {
             throw POSIXError(.init(rawValue: errno)!)
         }
 
-        let fd = extractDescFD(from: &iov.iovecs)
+        let fd = try extractDescFD(from: &iov)
         return SystemJailDescriptor(fd)
     }
 
-    private static func extractDescFD(
-        from iovecs: inout [iovec]
-    ) -> RawDesc {
-        for entry in iovecs {
-            guard entry.iov_len == MemoryLayout<RawDesc>.size,
-                  let base = entry.iov_base else { continue }
 
-            return base.load(as: RawDesc.self)
+    /// Create or update a jail and return a descriptor.
+    public static func set(
+        iov: inout JailIOVector,
+        flags: JailSetFlags
+    ) throws -> SystemJailDescriptor {
+
+        let jid = iov.withUnsafeMutableIOVecs { buf in
+            jail_set(buf.baseAddress, UInt32(buf.count), flags.rawValue)
         }
 
-        fatalError("jail descriptor not returned by kernel")
+        guard jid >= 0 else {
+            throw POSIXError(.init(rawValue: errno)!)
+        }
+
+        let fd = try extractDescFD(from: &iov)
+        return SystemJailDescriptor(fd)
+    }
+
+
+    private static func extractDescFD(
+        from iov: inout JailIOVector
+    ) throws -> RawDesc {
+
+        let fd: RawDesc? = iov.withUnsafeMutableIOVecs { buf in
+            for entry in buf {
+                guard entry.iov_len == MemoryLayout<RawDesc>.size,
+                    let base = entry.iov_base
+                else { continue }
+
+                return base.load(as: RawDesc.self)
+            }
+            return nil
+        }
+
+        guard let fd else {
+            throw POSIXError(.EINVAL)
+        }
+
+        return fd
     }
 }

@@ -89,6 +89,10 @@ let package = Package(
             name: "CCapsicumTests",
             dependencies: ["CCapsicum"]
         ),
+        .testTarget(
+            name: "JailsTests",
+            dependencies: ["Jails"]
+        ),
         // .testTarget(
         //     name: "DescriptorsTests",
         //     dependencies: ["Capsicum", "CProcessDescriptor", "Descriptors"]
