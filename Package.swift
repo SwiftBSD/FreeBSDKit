@@ -93,14 +93,18 @@ let package = Package(
             name: "JailsTests",
             dependencies: ["Jails"]
         ),
+        .testTarget(
+            name: "CapabilitiesTests",
+            dependencies: ["Capabilities"]
+        ),
         // .testTarget(
         //     name: "DescriptorsTests",
         //     dependencies: ["Capsicum", "CProcessDescriptor", "Descriptors"]
         // ),
-        // .testTarget(
-        //     name: "FreeBSDKitTests",
-        //     dependencies: ["FreeBSDKit"]
-        // ),
+        .testTarget(
+            name: "FreeBSDKitTests",
+            dependencies: ["FreeBSDKit"]
+        ),
         .executableTarget(
             name: "TestTool",
             dependencies: ["Capsicum", "Descriptors"]
