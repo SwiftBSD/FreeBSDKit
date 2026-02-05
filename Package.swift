@@ -40,6 +40,10 @@ let package = Package(
             path: "Sources/CCapsicum"
         ),
         .target(
+            name: "CExtendedError",
+            path: "Sources/CExtendedError"
+        ),
+        .target(
             name: "Capsicum",
             dependencies: ["CCapsicum", "FreeBSDKit"]
         ),
