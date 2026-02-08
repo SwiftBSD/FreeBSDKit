@@ -101,10 +101,14 @@ let package = Package(
             name: "CapabilitiesTests",
             dependencies: ["Capabilities"]
         ),
-        // .testTarget(
-        //     name: "DescriptorsTests",
-        //     dependencies: ["Capsicum", "CProcessDescriptor", "Descriptors"]
-        // ),
+        .testTarget(
+            name: "DescriptorsTests",
+            dependencies: ["Capsicum", "CProcessDescriptor", "Descriptors"]
+        ),
+        .testTarget(
+            name: "SignalDispatchersTests",
+            dependencies: ["SignalDispatchers", "Descriptors", "FreeBSDKit"]
+        ),
         .testTarget(
             name: "FreeBSDKitTests",
             dependencies: ["FreeBSDKit"]
