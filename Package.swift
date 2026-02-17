@@ -26,6 +26,10 @@ let package = Package(
             name: "SignalDispatchers",
             targets: ["SignalDispatchers"]
         ),
+        .library(
+            name: "BPC",
+            targets: ["BPC"]
+        ),
         .executable(
             name: "testtool",
             targets: ["TestTool"]
@@ -85,6 +89,10 @@ let package = Package(
             name: "SignalDispatchers",
             dependencies: ["Descriptors", "FreeBSDKit"]
         ),
+        .target(
+            name: "BPC",
+            dependencies: ["Capabilities", "Descriptors", "Capsicum", "FreeBSDKit"]
+        ),
         .testTarget(
             name: "CapsicumTests",
             dependencies: ["Capsicum"]
@@ -112,6 +120,10 @@ let package = Package(
         .testTarget(
             name: "FreeBSDKitTests",
             dependencies: ["FreeBSDKit"]
+        ),
+        .testTarget(
+            name: "BPCTests",
+            dependencies: ["BPC", "Capabilities", "Descriptors"]
         ),
         .executableTarget(
             name: "TestTool",

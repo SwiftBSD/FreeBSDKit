@@ -9,7 +9,7 @@ import Descriptors
 import Foundation
 import FreeBSDKit
 
-struct SocketCapability: Capability, SocketDescriptor, ~Copyable {
+public struct SocketCapability: Capability, SocketDescriptor, ~Copyable {
     public typealias RAWBSD = Int32
     private var handle: RawCapabilityHandle
 
