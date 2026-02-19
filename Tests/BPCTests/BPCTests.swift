@@ -52,14 +52,14 @@ final class BPCTests: XCTestCase {
         let socketPath = "/tmp/bpc-test-\(UUID().uuidString).sock"
         defer { try? FileManager.default.removeItem(atPath: socketPath) }
 
-        let listener = try BSDListener.unix(path: socketPath)
+        let listener = try BSDListener.listen(on: socketPath)
 
         // Server: accept one connection, receive ping, send pong
         let serverTask = Task {
             let server = try await listener.accept()
             await server.start()
 
-            for await message in await server.messages {
+            for await message in try await server.messages() {
                 if message.id == .ping {
                     let pong = Message(
                         id: .pong,
@@ -97,7 +97,7 @@ final class BPCTests: XCTestCase {
         let socketPath = "/tmp/bpc-notif-\(UUID().uuidString).sock"
         defer { try? FileManager.default.removeItem(atPath: socketPath) }
 
-        let listener = try BSDListener.unix(path: socketPath)
+        let listener = try BSDListener.listen(on: socketPath)
 
         // Server: accept and push 3 events
         let serverTask = Task {
@@ -118,7 +118,7 @@ final class BPCTests: XCTestCase {
         await client.start()
 
         var received: [Message] = []
-        for await message in await client.messages {
+        for await message in try await client.messages() {
             received.append(message)
             if received.count == 3 { break }
         }

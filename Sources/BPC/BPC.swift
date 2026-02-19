@@ -64,6 +64,7 @@ public enum MessageID: UInt32, Sendable {
 public enum BPCError: Error, Sendable {
     case disconnected
     case listenerClosed
+    case streamAlreadyClaimed
     case invalidMessageFormat
     case unsupportedVersion(UInt8)
     case unexpectedMessage(MessageID)
@@ -101,27 +102,26 @@ private final class SocketHolder: @unchecked Sendable {
     }
 }
 
-// MARK: - Endpoint
 
 public actor BSDEndpoint {
-
-    // MARK: Private State
-
     private let socketHolder: SocketHolder
     private let ioQueue = DispatchQueue(label: "com.bpc.endpoint.io", qos: .userInitiated)
-
     private var nextCorrelationID: UInt32 = 1
     private var pendingReplies: [UInt32: CheckedContinuation<Message, Error>] = [:]
     private var incomingContinuation: AsyncStream<Message>.Continuation?
+    private var messageStream: AsyncStream<Message>?
     private var receiveLoopTask: Task<Void, Never>?
 
     // MARK: Init
-
     public init(socket: consuming SocketCapability) {
         self.socketHolder = SocketHolder(socket: socket)
     }
 
     public func start() {
+        let (stream, continuation) = AsyncStream.makeStream(of: Message.self)
+        messageStream = stream
+        incomingContinuation = continuation
+
         receiveLoopTask = Task {
             await receiveLoop()
         }
@@ -163,16 +163,14 @@ public actor BSDEndpoint {
         }
     }
 
-    /// Continuous stream of unsolicited messages — server pushes, events, etc.
-    /// Only one consumer at a time; a second call replaces the first continuation.
-    public var messages: AsyncStream<Message> {
-        AsyncStream { continuation in
-            self.incomingContinuation = continuation
-            continuation.onTermination = { [weak self] _ in
-                guard let self else { return }
-                Task { await self.clearIncomingContinuation() }
-            }
+    /// Unsolicited messages — server pushes, events, etc.
+    /// Can only be claimed by one task. Throws if already claimed or start() hasn't been called.
+    public func messages() throws -> AsyncStream<Message> {
+        guard let stream = messageStream else {
+            throw BPCError.streamAlreadyClaimed
         }
+        messageStream = nil
+        return stream
     }
 
     // MARK: - Connect
@@ -189,10 +187,6 @@ public actor BSDEndpoint {
     }
 
     // MARK: - Private
-
-    private func clearIncomingContinuation() {
-        incomingContinuation = nil
-    }
 
     /// Every incoming message routes through here exactly once.
     private func dispatch(_ message: Message) {
@@ -338,8 +332,11 @@ public actor BSDListener {
     private let socketHolder: SocketHolder
     private let ioQueue = DispatchQueue(label: "com.bpc.listener.io", qos: .userInitiated)
     private var isActive: Bool = true
+    private var connectionStream: AsyncThrowingStream<BSDEndpoint, Error>?
+    private var connectionContinuation: AsyncThrowingStream<BSDEndpoint, Error>.Continuation?
+    private var acceptLoopTask: Task<Void, Never>?
 
-    public static func unix(path: String) throws -> BSDListener {
+    public static func listen(on path: String) throws -> BSDListener {
         let socket = try SocketCapability.socket(
             domain: .unix,
             type: [.stream, .cloexec],
@@ -353,6 +350,34 @@ public actor BSDListener {
 
     private init(socket: consuming SocketCapability) {
         self.socketHolder = SocketHolder(socket: socket)
+    }
+
+    /// Begin accepting connections. Must be called before accessing connections.
+    public func start() {
+        let (stream, continuation) = AsyncThrowingStream.makeStream(of: BSDEndpoint.self)
+        connectionStream = stream
+        connectionContinuation = continuation
+
+        acceptLoopTask = Task {
+            do {
+                while isActive {
+                    let endpoint = try await accept()
+                    connectionContinuation?.yield(endpoint)
+                }
+                connectionContinuation?.finish()
+            } catch {
+                connectionContinuation?.finish(throwing: error)
+            }
+        }
+    }
+
+    /// Incoming connections. Can only be claimed once. Throws if already claimed or start() hasn't been called.
+    public func connections() throws -> AsyncThrowingStream<BSDEndpoint, Error> {
+        guard let stream = connectionStream else {
+            throw BPCError.streamAlreadyClaimed
+        }
+        connectionStream = nil
+        return stream
     }
 
     /// Accept the next incoming connection. Suspends until a client connects.
@@ -378,6 +403,10 @@ public actor BSDListener {
 
     public func stop() {
         isActive = false
+        acceptLoopTask?.cancel()
+        acceptLoopTask = nil
         socketHolder.close()
+        connectionContinuation?.finish()
+        connectionContinuation = nil
     }
 }
