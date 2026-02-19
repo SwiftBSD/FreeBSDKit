@@ -64,12 +64,34 @@ public enum MessageID: UInt32, Sendable {
 public enum BPCError: Error, Sendable {
     case disconnected
     case listenerClosed
+    case notStarted
     case streamAlreadyClaimed
     case invalidMessageFormat
     case unsupportedVersion(UInt8)
     case unexpectedMessage(MessageID)
     case timeout
 }
+
+// MARK: - Protocols
+
+public protocol BPCEndpoint: Actor {
+    func start()
+    func stop()
+    func send(_ message: Message) async throws
+    func request(_ message: Message) async throws -> Message
+    func messages() throws -> AsyncStream<Message>
+}
+
+public protocol BPCListener: Actor {
+    func start()
+    func stop()
+    func connections() throws -> AsyncThrowingStream<BSDEndpoint, Error>
+    func accept() async throws -> BSDEndpoint
+}
+
+// MARK: - LifecycleState
+
+private enum LifecycleState { case idle, running, stopped }
 
 // MARK: - SocketHolder
 
@@ -93,6 +115,13 @@ private final class SocketHolder: @unchecked Sendable {
         return try body(socket!)
     }
 
+    func withSocketOrThrow<R>(_ body: (borrowing SocketCapability) throws -> R) throws -> R where R: ~Copyable {
+        lock.lock()
+        defer { lock.unlock() }
+        guard socket != nil else { throw BPCError.disconnected }
+        return try body(socket!)
+    }
+
     func close() {
         lock.lock()
         defer { lock.unlock() }
@@ -103,7 +132,7 @@ private final class SocketHolder: @unchecked Sendable {
 }
 
 
-public actor BSDEndpoint {
+public actor BSDEndpoint: BPCEndpoint {
     private let socketHolder: SocketHolder
     private let ioQueue = DispatchQueue(label: "com.bpc.endpoint.io", qos: .userInitiated)
     private var nextCorrelationID: UInt32 = 1
@@ -111,6 +140,7 @@ public actor BSDEndpoint {
     private var incomingContinuation: AsyncStream<Message>.Continuation?
     private var messageStream: AsyncStream<Message>?
     private var receiveLoopTask: Task<Void, Never>?
+    private var state: LifecycleState = .idle
 
     // MARK: Init
     public init(socket: consuming SocketCapability) {
@@ -118,6 +148,7 @@ public actor BSDEndpoint {
     }
 
     public func start() {
+        state = .running
         let (stream, continuation) = AsyncStream.makeStream(of: Message.self)
         messageStream = stream
         incomingContinuation = continuation
@@ -128,6 +159,7 @@ public actor BSDEndpoint {
     }
 
     public func stop() {
+        state = .stopped
         receiveLoopTask?.cancel()
         receiveLoopTask = nil
         socketHolder.close()
@@ -164,8 +196,14 @@ public actor BSDEndpoint {
     }
 
     /// Unsolicited messages — server pushes, events, etc.
-    /// Can only be claimed by one task. Throws if already claimed or start() hasn't been called.
+    /// Can only be claimed by one task. Throws `.notStarted` if start() hasn't been called,
+    /// `.disconnected` if stop() has been called, or `.streamAlreadyClaimed` if already claimed.
     public func messages() throws -> AsyncStream<Message> {
+        switch state {
+        case .idle:    throw BPCError.notStarted
+        case .stopped: throw BPCError.disconnected
+        case .running: break
+        }
         guard let stream = messageStream else {
             throw BPCError.streamAlreadyClaimed
         }
@@ -270,19 +308,17 @@ public actor BSDEndpoint {
         wireData.append(message.payload)
         wireData.append(Data(count: 256))  // trailer
 
-        try socketHolder.withSocket { socket in
+        try socketHolder.withSocketOrThrow { socket in
             try socket.sendDescriptors(message.descriptors, payload: wireData)
-        } ?? { throw BPCError.disconnected }()
+        }
     }
 
     nonisolated private func socketReceive() throws -> Message {
         // Max buffer: 256-byte header + 1MB payload + 256-byte trailer
         let maxBufferSize = 256 + (1024 * 1024) + 256
 
-        guard let (wireData, descriptors) = try socketHolder.withSocket({ socket in
+        let (wireData, descriptors) = try socketHolder.withSocketOrThrow { socket in
             try socket.recvDescriptors(maxDescriptors: 255, bufferSize: maxBufferSize)
-        }) else {
-            throw BPCError.disconnected
         }
 
         guard wireData.count >= 256 else {
@@ -327,11 +363,11 @@ public actor BSDEndpoint {
 
 // MARK: - Listener
 
-public actor BSDListener {
+public actor BSDListener: BPCListener {
 
     private let socketHolder: SocketHolder
     private let ioQueue = DispatchQueue(label: "com.bpc.listener.io", qos: .userInitiated)
-    private var isActive: Bool = true
+    private var state: LifecycleState = .idle
     private var connectionStream: AsyncThrowingStream<BSDEndpoint, Error>?
     private var connectionContinuation: AsyncThrowingStream<BSDEndpoint, Error>.Continuation?
     private var acceptLoopTask: Task<Void, Never>?
@@ -354,13 +390,14 @@ public actor BSDListener {
 
     /// Begin accepting connections. Must be called before accessing connections.
     public func start() {
+        state = .running
         let (stream, continuation) = AsyncThrowingStream.makeStream(of: BSDEndpoint.self)
         connectionStream = stream
         connectionContinuation = continuation
 
         acceptLoopTask = Task {
             do {
-                while isActive {
+                while state == .running {
                     let endpoint = try await accept()
                     connectionContinuation?.yield(endpoint)
                 }
@@ -371,8 +408,14 @@ public actor BSDListener {
         }
     }
 
-    /// Incoming connections. Can only be claimed once. Throws if already claimed or start() hasn't been called.
+    /// Incoming connections. Can only be claimed once. Throws `.notStarted` if start() hasn't been
+    /// called, `.listenerClosed` if stop() has been called, or `.streamAlreadyClaimed` if already claimed.
     public func connections() throws -> AsyncThrowingStream<BSDEndpoint, Error> {
+        switch state {
+        case .idle:    throw BPCError.notStarted
+        case .stopped: throw BPCError.listenerClosed
+        case .running: break
+        }
         guard let stream = connectionStream else {
             throw BPCError.streamAlreadyClaimed
         }
@@ -382,7 +425,7 @@ public actor BSDListener {
 
     /// Accept the next incoming connection. Suspends until a client connects.
     public func accept() async throws -> BSDEndpoint {
-        guard isActive else { throw BPCError.listenerClosed }
+        guard state == .running else { throw BPCError.listenerClosed }
 
         return try await withCheckedThrowingContinuation { continuation in
             ioQueue.async {
@@ -402,7 +445,7 @@ public actor BSDListener {
     }
 
     public func stop() {
-        isActive = false
+        state = .stopped
         acceptLoopTask?.cancel()
         acceptLoopTask = nil
         socketHolder.close()
