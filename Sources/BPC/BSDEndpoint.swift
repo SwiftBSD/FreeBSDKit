@@ -72,8 +72,12 @@ public protocol BPCEndpoint: Actor {
 
 /// A ``BPCEndpoint`` backed by a BSD Unix-domain SEQPACKET socket.
 ///
-/// Uses SOCK_SEQPACKET for connection-oriented, message-boundary-preserving
-/// communication. Obtain an instance via ``connect(path:)`` or ``pair()``.
+/// This endpoint is specifically designed for SOCK_SEQPACKET which provides:
+/// - Connection-oriented communication (like STREAM)
+/// - Message boundary preservation (like DATAGRAM)
+/// - Reliable, ordered delivery
+///
+/// Obtain an instance via ``BSDClient`` or ``pair()``.
 /// After calling ``start()``, use ``send(_:)`` and ``request(_:)`` to write
 /// to the wire, and ``messages()`` to consume inbound messages.
 public actor BSDEndpoint: BPCEndpoint {
@@ -183,30 +187,13 @@ public actor BSDEndpoint: BPCEndpoint {
         return stream
     }
 
-    // MARK: - Connect
-
-    /// Connects to a BPC server at the given Unix-domain socket path.
-    ///
-    /// - Parameters:
-    ///   - path: The filesystem path of the server's socket.
-    ///   - ioQueue: Optional custom DispatchQueue for I/O operations. If `nil`, a default queue is created.
-    /// - Returns: A new, unstarted ``BSDEndpoint``. Call ``start()`` before use.
-    /// - Throws: A system error if the socket cannot be created or the connection is refused.
-    public static func connect(path: String, ioQueue: DispatchQueue? = nil) throws -> BSDEndpoint {
-        let socket = try SocketCapability.socket(
-            domain: .unix,
-            type: [.seqpacket, .cloexec],
-            protocol: .default
-        )
-        let address = try UnixSocketAddress(path: path)
-        try socket.connect(address: address)
-        return BSDEndpoint(socket: socket, ioQueue: ioQueue)
-    }
+    // MARK: - Pair
 
     /// Creates a pair of connected ``BSDEndpoint`` instances using `socketpair(2)`.
     ///
-    /// The returned endpoints are bidirectionally connected and ready for local IPC.
-    /// Both are unstarted; call ``start()`` on each before exchanging messages.
+    /// The returned endpoints are bidirectionally connected SEQPACKET sockets ready
+    /// for local IPC. Both are unstarted; call ``start()`` on each before exchanging
+    /// messages.
     ///
     /// Each endpoint gets its own independent I/O queue to avoid serialization bottlenecks
     /// and potential deadlocks when the endpoints communicate with each other.
@@ -216,7 +203,7 @@ public actor BSDEndpoint: BPCEndpoint {
     ///                 If `nil`, a default queue is created.
     ///   - secondQueue: Optional custom DispatchQueue for the second endpoint's I/O operations.
     ///                  If `nil`, a default queue is created.
-    /// - Returns: A tuple of two connected endpoints, each with its own I/O queue.
+    /// - Returns: A tuple of two connected SEQPACKET endpoints, each with its own I/O queue.
     /// - Throws: A system error if the socketpair cannot be created.
     public static func pair(
         firstQueue: DispatchQueue? = nil,

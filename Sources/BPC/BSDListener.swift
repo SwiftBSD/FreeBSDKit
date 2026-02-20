@@ -47,11 +47,14 @@ public protocol BPCListener: Actor {
 
 /// A ``BPCListener`` backed by a BSD Unix-domain SEQPACKET socket.
 ///
-/// Uses SOCK_SEQPACKET for connection-oriented, message-boundary-preserving
-/// communication. Obtain an instance via ``listen(on:)``. After calling
-/// ``start()``, iterate over ``connections()`` to receive newly accepted
-/// ``BSDEndpoint`` instances, or call ``accept()`` to handle one connection
-/// at a time.
+/// This listener is specifically designed for SOCK_SEQPACKET which provides:
+/// - Connection-oriented communication (listen/accept like STREAM)
+/// - Message boundary preservation (like DATAGRAM)
+/// - Reliable, ordered delivery
+///
+/// Obtain an instance via ``listen(on:)``. After calling ``start()``,
+/// iterate over ``connections()`` to receive newly accepted ``BSDEndpoint``
+/// instances, or call ``accept()`` to handle one connection at a time.
 public actor BSDListener: BPCListener {
     private let socketHolder: SocketHolder
     private let ioQueue: DispatchQueue
@@ -62,14 +65,19 @@ public actor BSDListener: BPCListener {
 
     // MARK: - Listen
 
-    /// Begins listening on a Unix-domain socket at the given path.
+    /// Begins listening on a Unix-domain SEQPACKET socket at the given path.
     ///
     /// - Parameters:
     ///   - path: The filesystem path at which to bind the socket.
+    ///   - backlog: Maximum length of the pending connection queue (default: 128)
     ///   - ioQueue: Optional custom DispatchQueue for I/O operations. If `nil`, a default queue is created.
     /// - Returns: A new, unstarted ``BSDListener``. Call ``start()`` before use.
     /// - Throws: A system error if the socket cannot be created or bound.
-    public static func listen(on path: String, ioQueue: DispatchQueue? = nil) throws -> BSDListener {
+    public static func listen(
+        on path: String,
+        backlog: Int32 = 128,
+        ioQueue: DispatchQueue? = nil
+    ) throws -> BSDListener {
         let socket = try SocketCapability.socket(
             domain: .unix,
             type: [.seqpacket, .cloexec],
@@ -77,11 +85,20 @@ public actor BSDListener: BPCListener {
         )
         let address = try UnixSocketAddress(path: path)
         try socket.bind(address: address)
-        try socket.listen(backlog: 128)
+        try socket.listen(backlog: backlog)
         return BSDListener(socket: socket, ioQueue: ioQueue)
     }
 
-    private init(socket: consuming SocketCapability, ioQueue: DispatchQueue? = nil) {
+    /// Creates a listener from an already-listening socket.
+    ///
+    /// Use this when you receive a listening socket via descriptor passing,
+    /// socket activation, or other external mechanisms.
+    ///
+    /// - Parameters:
+    ///   - socket: An already-bound and listening socket
+    ///   - ioQueue: Optional custom DispatchQueue for I/O operations
+    /// - Returns: A new, unstarted ``BSDListener``. Call ``start()`` before use.
+    public init(socket: consuming SocketCapability, ioQueue: DispatchQueue? = nil) {
         self.socketHolder = SocketHolder(socket: socket)
         self.ioQueue = ioQueue ?? DispatchQueue(label: "com.bpc.listener.io", qos: .userInitiated)
     }

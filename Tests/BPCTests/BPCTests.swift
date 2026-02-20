@@ -78,7 +78,7 @@ final class BPCTests: XCTestCase {
         try await Task.sleep(nanoseconds: 50_000_000)
 
         // Client: connect, send ping, await pong
-        let client = try BSDEndpoint.connect(path: socketPath)
+        let client = try BSDClient.connect(path: socketPath)
         await client.start()
 
         let reply = try await client.request(.request(.ping, payload: Data("timestamp".utf8)))
@@ -114,7 +114,7 @@ final class BPCTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        let client = try BSDEndpoint.connect(path: socketPath)
+        let client = try BSDClient.connect(path: socketPath)
         await client.start()
 
         var received: [Message] = []
