@@ -22,37 +22,37 @@ final class SysctlTests: XCTestCase {
 
     // MARK: - Int32 Tests
 
-    func testGetInt32_SeqpacketMax() throws {
-        // Get value using C API
-        var cValue: Int32 = 0
-        var size = MemoryLayout<Int32>.size
+    func testGetUInt_SeqpacketMax() throws {
+        // Get value using C API (unsigned long)
+        var cValue: UInt = 0
+        var size = MemoryLayout<UInt>.size
         let cResult = "net.local.seqpacket.maxseqpacket".withCString { namePtr in
             sysctlbyname(namePtr, &cValue, &size, nil, 0)
         }
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using Swift API
-        let swiftValue: Int32 = try BSDSysctl.get("net.local.seqpacket.maxseqpacket")
+        let swiftValue: UInt = try BSDSysctl.get("net.local.seqpacket.maxseqpacket")
 
         // Compare
-        XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for Int32 value")
+        XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for UInt value")
         XCTAssertGreaterThan(swiftValue, 0, "SEQPACKET max should be positive")
     }
 
-    func testGetInt32_DatagramMax() throws {
-        // Get value using C API
-        var cValue: Int32 = 0
-        var size = MemoryLayout<Int32>.size
+    func testGetUInt_DatagramMax() throws {
+        // Get value using C API (unsigned long)
+        var cValue: UInt = 0
+        var size = MemoryLayout<UInt>.size
         let cResult = "net.local.dgram.maxdgram".withCString { namePtr in
             sysctlbyname(namePtr, &cValue, &size, nil, 0)
         }
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using Swift API
-        let swiftValue: Int32 = try BSDSysctl.get("net.local.dgram.maxdgram")
+        let swiftValue: UInt = try BSDSysctl.get("net.local.dgram.maxdgram")
 
         // Compare
-        XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for Int32 value")
+        XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for UInt value")
         XCTAssertGreaterThan(swiftValue, 0, "DGRAM max should be positive")
     }
 
@@ -187,17 +187,17 @@ final class SysctlTests: XCTestCase {
 
     // MARK: - Subscript Tests
 
-    func testSubscript_Int32() throws {
-        // Get value using C API
-        var cValue: Int32 = 0
-        var size = MemoryLayout<Int32>.size
+    func testSubscript_UInt() throws {
+        // Get value using C API (unsigned long)
+        var cValue: UInt = 0
+        var size = MemoryLayout<UInt>.size
         let cResult = "net.local.seqpacket.maxseqpacket".withCString { namePtr in
             sysctlbyname(namePtr, &cValue, &size, nil, 0)
         }
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using subscript
-        let swiftValue: Int32 = try BSDSysctl["net.local.seqpacket.maxseqpacket"]
+        let swiftValue: UInt = try BSDSysctl["net.local.seqpacket.maxseqpacket"]
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Subscript should match C API")
