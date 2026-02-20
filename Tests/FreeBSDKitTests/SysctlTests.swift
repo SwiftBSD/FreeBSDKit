@@ -32,7 +32,7 @@ final class SysctlTests: XCTestCase {
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using Swift API
-        let swiftValue: Int32 = try Sysctl.get("net.local.seqpacket.maxseqpacket")
+        let swiftValue: Int32 = try BSDSysctl.get("net.local.seqpacket.maxseqpacket")
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for Int32 value")
@@ -49,7 +49,7 @@ final class SysctlTests: XCTestCase {
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using Swift API
-        let swiftValue: Int32 = try Sysctl.get("net.local.dgram.maxdgram")
+        let swiftValue: Int32 = try BSDSysctl.get("net.local.dgram.maxdgram")
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for Int32 value")
@@ -66,7 +66,7 @@ final class SysctlTests: XCTestCase {
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using Swift API
-        let swiftValue: Int32 = try Sysctl.get("kern.osreldate")
+        let swiftValue: Int32 = try BSDSysctl.get("kern.osreldate")
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for Int32 value")
@@ -85,7 +85,7 @@ final class SysctlTests: XCTestCase {
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using Swift API
-        let swiftValue: Int64 = try Sysctl.get("hw.physmem")
+        let swiftValue: Int64 = try BSDSysctl.get("hw.physmem")
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for Int64 value")
@@ -102,7 +102,7 @@ final class SysctlTests: XCTestCase {
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using Swift API
-        let swiftValue: Int64 = try Sysctl.get("hw.usermem")
+        let swiftValue: Int64 = try BSDSysctl.get("hw.usermem")
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for Int64 value")
@@ -122,7 +122,7 @@ final class SysctlTests: XCTestCase {
         let cValue = String(cString: cBuffer)
 
         // Get value using Swift API
-        let swiftValue = try Sysctl.getString("kern.hostname")
+        let swiftValue = try BSDSysctl.getString("kern.hostname")
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for string value")
@@ -140,7 +140,7 @@ final class SysctlTests: XCTestCase {
         let cValue = String(cString: cBuffer)
 
         // Get value using Swift API
-        let swiftValue = try Sysctl.getString("kern.ostype")
+        let swiftValue = try BSDSysctl.getString("kern.ostype")
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for string value")
@@ -158,7 +158,7 @@ final class SysctlTests: XCTestCase {
         let cValue = String(cString: cBuffer)
 
         // Get value using Swift API
-        let swiftValue = try Sysctl.getString("kern.osrelease")
+        let swiftValue = try BSDSysctl.getString("kern.osrelease")
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Swift API should match C API for string value")
@@ -177,7 +177,7 @@ final class SysctlTests: XCTestCase {
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using Swift API
-        let swiftValue: timeval = try Sysctl.get("kern.boottime")
+        let swiftValue: timeval = try BSDSysctl.get("kern.boottime")
 
         // Compare
         XCTAssertEqual(swiftValue.tv_sec, cValue.tv_sec, "Swift API tv_sec should match C API")
@@ -197,7 +197,7 @@ final class SysctlTests: XCTestCase {
         XCTAssertEqual(cResult, 0, "C API call should succeed")
 
         // Get value using subscript
-        let swiftValue: Int32 = try Sysctl["net.local.seqpacket.maxseqpacket"]
+        let swiftValue: Int32 = try BSDSysctl["net.local.seqpacket.maxseqpacket"]
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "Subscript should match C API")
@@ -214,7 +214,7 @@ final class SysctlTests: XCTestCase {
         let cValue = String(cString: cBuffer)
 
         // Get value using subscript
-        let swiftValue: String = try Sysctl.string["kern.hostname"]
+        let swiftValue: String = try BSDSysctl.string["kern.hostname"]
 
         // Compare
         XCTAssertEqual(swiftValue, cValue, "String subscript should match C API")
@@ -224,14 +224,14 @@ final class SysctlTests: XCTestCase {
 
     func testGetInvalidSysctl() {
         // Test that invalid sysctl names throw errors
-        XCTAssertThrowsError(try Sysctl.getString("invalid.sysctl.name")) { error in
+        XCTAssertThrowsError(try BSDSysctl.getString("invalid.sysctl.name")) { error in
             XCTAssertTrue(error is BSDError, "Should throw BSDError")
         }
     }
 
     func testGetStringInvalidSysctl() {
         // Test that invalid sysctl names throw errors for getString
-        XCTAssertThrowsError(try Sysctl.getString("invalid.sysctl.name")) { error in
+        XCTAssertThrowsError(try BSDSysctl.getString("invalid.sysctl.name")) { error in
             XCTAssertTrue(error is BSDError, "Should throw BSDError")
         }
     }

@@ -24,14 +24,14 @@ private func sysctlbyname(
 /// ## Example
 /// ```swift
 /// // Read values
-/// let maxSeqpacket: Int32 = try Sysctl.get("net.local.seqpacket.maxseqpacket")
-/// let hostname: String = try Sysctl.get("kern.hostname")
-/// let boottime: timeval = try Sysctl.get("kern.boottime")
+/// let maxSeqpacket: Int32 = try BSDSysctl.get("net.local.seqpacket.maxseqpacket")
+/// let hostname: String = try BSDSysctl.get("kern.hostname")
+/// let boottime: timeval = try BSDSysctl.get("kern.boottime")
 ///
 /// // Write values
-/// try Sysctl.set("kern.hostname", value: "newhost")
+/// try BSDSysctl.set("kern.hostname", value: "newhost")
 /// ```
-public enum Sysctl {
+public enum BSDSysctl {
 
     // MARK: - Generic Get/Set
 
@@ -141,8 +141,8 @@ public enum Sysctl {
     ///
     /// ## Example
     /// ```swift
-    /// let value: Int32 = try Sysctl["net.local.seqpacket.maxseqpacket"]
-    /// let hostname: String = try Sysctl.string["kern.hostname"]
+    /// let value: Int32 = try BSDSysctl["net.local.seqpacket.maxseqpacket"]
+    /// let hostname: String = try BSDSysctl.string["kern.hostname"]
     /// ```
     public static subscript<T>(_ name: String) -> T {
         get throws {

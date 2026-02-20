@@ -19,7 +19,7 @@ public enum SocketLimits {
     /// - Returns: Maximum message size in bytes (typically 65536)
     public static func maxSeqpacketSize() -> Int {
         do {
-            let value: Int32 = try Sysctl.get("net.local.seqpacket.maxseqpacket")
+            let value: Int32 = try BSDSysctl.get("net.local.seqpacket.maxseqpacket")
             return Int(value)
         } catch {
             // Fallback to conservative default if sysctl fails
@@ -36,7 +36,7 @@ public enum SocketLimits {
     /// - Returns: Maximum datagram size in bytes (typically 8192)
     public static func maxDatagramSize() -> Int {
         do {
-            let value: Int32 = try Sysctl.get("net.local.dgram.maxdgram")
+            let value: Int32 = try BSDSysctl.get("net.local.dgram.maxdgram")
             return Int(value)
         } catch {
             // Fallback to conservative default if sysctl fails
