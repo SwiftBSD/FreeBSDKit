@@ -56,7 +56,7 @@ open class OpaqueDescriptorRef: CustomDebugStringConvertible, @unchecked Sendabl
     /// Return the underlying BSD descriptor, if still valid.
     ///
     /// This is intentionally **optional** to reflect lifetime.
-    func toBSDValue() -> Int32? {
+    public func toBSDValue() -> Int32? {
         lock.lock()
         defer { lock.unlock() }
         return fd

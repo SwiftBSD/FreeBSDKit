@@ -55,7 +55,7 @@ public protocol BPCEndpoint: Actor {
 ///
 /// Obtain an instance via ``connect(path:)``. After calling ``start()``, use
 /// ``send(_:)`` and ``request(_:)`` to write to the wire, and ``messages()`` to
-/// consume unsolicited inbound messages.
+/// consume inbound messages.
 public actor BSDEndpoint: BPCEndpoint {
     private let socketHolder: SocketHolder
     private let ioQueue: DispatchQueue
@@ -156,7 +156,7 @@ public actor BSDEndpoint: BPCEndpoint {
     public static func connect(path: String, ioQueue: DispatchQueue? = nil) throws -> BSDEndpoint {
         let socket = try SocketCapability.socket(
             domain: .unix,
-            type: [.stream, .cloexec],
+            type: [.datagram, .cloexec],
             protocol: .default
         )
         let address = try UnixSocketAddress(path: path)
@@ -185,7 +185,7 @@ public actor BSDEndpoint: BPCEndpoint {
     ) throws -> (BSDEndpoint, BSDEndpoint) {
         let socketPair = try SocketCapability.socketPair(
             domain: .unix,
-            type: [.stream, .cloexec],
+            type: [.datagram, .cloexec],
             protocol: .default
         )
         return (BSDEndpoint(socket: socketPair.first, ioQueue: firstQueue),
@@ -250,14 +250,76 @@ public actor BSDEndpoint: BPCEndpoint {
     // Header offsets:
     //   [messageID: UInt32]         4 bytes  offset  0
     //   [correlationID: UInt32]     4 bytes  offset  4
-    //   [payloadLength: UInt32]     4 bytes  offset  8
+    //   [payloadLength: UInt32]     4 bytes  offset  8  (0 if payload is out-of-line)
     //   [descriptorCount: UInt8]    1 byte   offset 12
     //   [version: UInt8]            1 byte   offset 13
-    //   [reserved: UInt8[242]]    242 bytes  offset 14
+    //   [flags: UInt8]              1 byte   offset 14
+    //     - bit 0: hasOOLPayload (1 if payload sent via shared memory)
+    //     - bits 1-7: reserved
+    //   [reserved: UInt8[241]]    241 bytes  offset 15
     //
-    // Trailer: 256 bytes, reserved for future use (zeros on send).
+    // Trailer (256 bytes):
+    //   [descriptorKinds[0..254]]  255 bytes  offset 0-254
+    //     - Each byte encodes the DescriptorKind for the corresponding descriptor
+    //     - Value 255 indicates an out-of-line payload descriptor
+    //   [reserved: UInt8]           1 byte   offset 255
+    //
+    // Out-of-line (OOL) payload:
+    //   When payload exceeds MAX_INLINE_PAYLOAD bytes, it's sent via shared memory:
+    //   1. A SharedMemoryCapability is created
+    //   2. Payload is written to shared memory
+    //   3. The shm descriptor is prepended to the descriptor list
+    //   4. Its kind in the trailer is marked as oolPayloadWireValue (255)
+    //   5. payloadLength is set to 0 and hasOOLPayload flag is set
+
+    private static let MAX_INLINE_PAYLOAD = 1024 * 1024  // 1 MB
 
     nonisolated private func socketSend(_ message: Message) throws {
+        var payload = message.payload
+        var descriptors = message.descriptors
+        var flags: UInt8 = 0
+
+        // Handle out-of-line payload if needed
+        if payload.count > Self.MAX_INLINE_PAYLOAD {
+            // Create shared memory for the payload
+            let shmName = "/bpc-ool-\(UUID().uuidString)"
+            let shm = try SharedMemoryCapability.open(
+                name: shmName,
+                oflag: O_CREAT | O_RDWR | O_EXCL,
+                mode: 0o600
+            )
+
+            // Unlink immediately so it's cleaned up when all refs are closed
+            try SharedMemoryCapability.unlink(name: shmName)
+
+            // Set size and map
+            try shm.setSize(payload.count)
+            let region = try shm.map(
+                size: payload.count,
+                protection: [.read, .write],
+                flags: [.shared]
+            )
+
+            // Copy payload to shared memory
+            payload.withUnsafeBytes { payloadBytes in
+                UnsafeMutableRawPointer(mutating: region.base).copyMemory(
+                    from: payloadBytes.baseAddress!,
+                    byteCount: payload.count
+                )
+            }
+
+            // Create OpaqueDescriptorRef for the shm with .shm kind
+            let shmRef = OpaqueDescriptorRef(shm.take(), kind: .shm)
+
+            // Prepend to descriptors list
+            descriptors.insert(shmRef, at: 0)
+
+            // Clear inline payload and set OOL flag
+            payload = Data()
+            flags |= 0x01  // hasOOLPayload
+        }
+
+        // Build header
         var header = Data(count: 256)
 
         var messageID = message.id.rawValue
@@ -266,18 +328,33 @@ public actor BSDEndpoint: BPCEndpoint {
         var correlationID = message.correlationID
         header.replaceSubrange(4..<8, with: Data(bytes: &correlationID, count: 4))
 
-        var payloadLength = UInt32(message.payload.count)
+        var payloadLength = UInt32(payload.count)
         header.replaceSubrange(8..<12, with: Data(bytes: &payloadLength, count: 4))
 
-        header[12] = UInt8(min(message.descriptors.count, 255))
+        header[12] = UInt8(min(descriptors.count, 255))
         header[13] = 0  // version
+        header[14] = flags
 
+        // Build trailer with descriptor kinds
+        var trailer = Data(count: 256)
+        for (index, descriptor) in descriptors.enumerated() {
+            guard index < 255 else { break }
+
+            // If this is the first descriptor and OOL flag is set, mark it specially
+            if index == 0 && (flags & 0x01) != 0 {
+                trailer[index] = DescriptorKind.oolPayloadWireValue
+            } else {
+                trailer[index] = descriptor.kind.wireValue
+            }
+        }
+
+        // Assemble wire data
         var wireData = header
-        wireData.append(message.payload)
-        wireData.append(Data(count: 256))  // trailer
+        wireData.append(payload)
+        wireData.append(trailer)
 
         try socketHolder.withSocketOrThrow { socket in
-            try socket.sendDescriptors(message.descriptors, payload: wireData)
+            try socket.sendDescriptors(descriptors, payload: wireData)
         }
     }
 
@@ -285,14 +362,15 @@ public actor BSDEndpoint: BPCEndpoint {
         // Max buffer: 256-byte header + 1 MB payload + 256-byte trailer
         let maxBufferSize = 256 + (1024 * 1024) + 256
 
-        let (wireData, descriptors) = try socketHolder.withSocketOrThrow { socket in
+        let (wireData, receivedDescriptors) = try socketHolder.withSocketOrThrow { socket in
             try socket.recvDescriptors(maxDescriptors: 255, bufferSize: maxBufferSize)
         }
 
-        guard wireData.count >= 256 else {
+        guard wireData.count >= 512 else {  // At least header + trailer
             throw BPCError.invalidMessageFormat
         }
 
+        // Parse header
         let messageIDRaw = Data(wireData[0..<4]).withUnsafeBytes { $0.load(as: UInt32.self) }
         guard let messageID = MessageID(rawValue: messageIDRaw) else {
             throw BPCError.invalidMessageFormat
@@ -301,8 +379,9 @@ public actor BSDEndpoint: BPCEndpoint {
         let correlationID = Data(wireData[4..<8]).withUnsafeBytes { $0.load(as: UInt32.self) }
         let payloadLength = Data(wireData[8..<12]).withUnsafeBytes { $0.load(as: UInt32.self) }
         let descriptorCount = wireData[12]
-
         let version = wireData[13]
+        let flags = wireData[14]
+
         guard version == 0 else {
             throw BPCError.unsupportedVersion(version)
         }
@@ -312,11 +391,71 @@ public actor BSDEndpoint: BPCEndpoint {
             throw BPCError.invalidMessageFormat
         }
 
-        guard descriptors.count == Int(descriptorCount) else {
+        guard receivedDescriptors.count == Int(descriptorCount) else {
             throw BPCError.invalidMessageFormat
         }
 
-        let payload = Data(wireData[256..<(256 + Int(payloadLength))])
+        // Extract trailer (last 256 bytes)
+        let trailerStart = wireData.count - 256
+        let trailer = wireData[trailerStart..<wireData.count]
+
+        // Decode descriptor kinds from trailer and set them on the descriptors
+        var descriptors = receivedDescriptors
+        for (index, descriptor) in descriptors.enumerated() {
+            guard index < 255 else { break }
+            let kindValue = trailer[index]
+            if kindValue != DescriptorKind.oolPayloadWireValue {
+                descriptor.kind = DescriptorKind.fromWireValue(kindValue)
+            }
+        }
+
+        // Handle out-of-line payload
+        var payload: Data
+        let hasOOLPayload = (flags & 0x01) != 0
+
+        if hasOOLPayload {
+            guard !descriptors.isEmpty else {
+                throw BPCError.invalidMessageFormat
+            }
+
+            // First descriptor should be the OOL payload shm
+            guard trailer[0] == DescriptorKind.oolPayloadWireValue else {
+                throw BPCError.invalidMessageFormat
+            }
+
+            let shmDescriptor = descriptors.removeFirst()
+
+            // Map the shared memory and read the payload
+            guard let shmFD = shmDescriptor.toBSDValue() else {
+                throw BPCError.invalidMessageFormat
+            }
+
+            // Get the size of the shm
+            var stat = stat()
+            guard Glibc.fstat(shmFD, &stat) == 0 else {
+                try BSDError.throwErrno(errno)
+            }
+
+            let shmSize = Int(stat.st_size)
+            guard shmSize > 0 else {
+                throw BPCError.invalidMessageFormat
+            }
+
+            // Map and read
+            let ptr = Glibc.mmap(nil, shmSize, PROT_READ, MAP_SHARED, shmFD, 0)
+            guard ptr != MAP_FAILED else {
+                try BSDError.throwErrno(errno)
+            }
+
+            defer {
+                Glibc.munmap(ptr, shmSize)
+            }
+
+            payload = Data(bytes: ptr!, count: shmSize)
+        } else {
+            // Inline payload
+            payload = Data(wireData[256..<(256 + Int(payloadLength))])
+        }
 
         return Message(
             id: messageID,
