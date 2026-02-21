@@ -94,22 +94,48 @@ public struct Message: Sendable {
 
 // MARK: - MessageID
 
-/// The set of message types exchanged over a BPC connection.
-public enum MessageID: UInt32, Sendable {
+/// Identifies the kind of message exchanged over a BPC connection.
+///
+/// Use the predefined constants for standard BPC messages, or create your own:
+///
+/// ```swift
+/// extension MessageID {
+///     static let myCustomRequest = MessageID(rawValue: 100)
+///     static let myCustomReply = MessageID(rawValue: 101)
+/// }
+///
+/// let message = Message(id: .myCustomRequest, payload: data)
+/// ```
+public struct MessageID: RawRepresentable, Hashable, Sendable {
+    public let rawValue: UInt32
+
+    public init(rawValue: UInt32) {
+        self.rawValue = rawValue
+    }
+
+    // MARK: Standard Message Types
+
     /// Liveness probe sent by the client.
-    case ping           = 1
+    public static let ping = MessageID(rawValue: 1)
+
     /// Response to a ``ping``.
-    case pong           = 2
+    public static let pong = MessageID(rawValue: 2)
+
     /// Requests a name lookup from the server.
-    case lookup         = 3
+    public static let lookup = MessageID(rawValue: 3)
+
     /// Server reply to a ``lookup``.
-    case lookupReply    = 4
+    public static let lookupReply = MessageID(rawValue: 4)
+
     /// Requests a subscription to server-side events.
-    case subscribe      = 5
+    public static let subscribe = MessageID(rawValue: 5)
+
     /// Server acknowledgement of a ``subscribe``.
-    case subscribeAck   = 6
+    public static let subscribeAck = MessageID(rawValue: 6)
+
     /// An unsolicited event pushed by the server.
-    case event          = 7
+    public static let event = MessageID(rawValue: 7)
+
     /// Indicates an error condition.
-    case error          = 255
+    public static let error = MessageID(rawValue: 255)
 }

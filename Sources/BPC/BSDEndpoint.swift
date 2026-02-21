@@ -412,9 +412,7 @@ public actor BSDEndpoint: BPCEndpoint {
 
         // Parse header
         let messageIDRaw = Data(wireData[0..<4]).withUnsafeBytes { $0.load(as: UInt32.self) }
-        guard let messageID = MessageID(rawValue: messageIDRaw) else {
-            throw BPCError.invalidMessageFormat
-        }
+        let messageID = MessageID(rawValue: messageIDRaw)
 
         let correlationID = Data(wireData[4..<8]).withUnsafeBytes { $0.load(as: UInt32.self) }
         let payloadLength = Data(wireData[8..<12]).withUnsafeBytes { $0.load(as: UInt32.self) }
