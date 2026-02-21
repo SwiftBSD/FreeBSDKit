@@ -16,7 +16,29 @@ import Glibc
 import Foundation
 import FreeBSDKit
 
+// MARK: - JailDescriptorInfo
 
+/// Wraps a jail descriptor along with its ownership flag.
+///
+/// Since `SystemJailDescriptor` is noncopyable, it cannot be returned in a tuple.
+/// This struct provides a way to return both the descriptor and the owning flag together.
+///
+/// Jail descriptors can be marked as "owning", which indicates that the holder has
+/// permission to remove the jail. The ownership flag is transmitted separately from
+/// the descriptor itself in protocols like BPC.
+public struct JailDescriptorInfo: ~Copyable {
+    /// The jail descriptor.
+    public let descriptor: SystemJailDescriptor
+
+    /// Whether this descriptor owns the jail (can remove it).
+    public let owning: Bool
+
+    /// Creates a jail descriptor info with the specified descriptor and ownership flag.
+    public init(descriptor: consuming SystemJailDescriptor, owning: Bool) {
+        self.descriptor = consume descriptor
+        self.owning = owning
+    }
+}
 
 // MARK: - Jail Descriptor Protocol
 

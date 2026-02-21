@@ -43,6 +43,11 @@ public enum BSDSysctl {
     /// - Parameter name: The sysctl name (e.g., "net.local.seqpacket.maxseqpacket")
     /// - Returns: The sysctl value as type T
     /// - Throws: `BSDError` if the sysctl doesn't exist or cannot be read
+    ///
+    /// - Warning: Type T must be a trivial type (POD) with no padding. Using this
+    ///   with non-trivial types or types that don't match the sysctl's actual type
+    ///   may result in undefined behavior. Always verify the sysctl's type using
+    ///   `sysctl -t` before use.
     public static func get<T>(_ name: String) throws -> T {
         let ptr = UnsafeMutableRawPointer.allocate(
             byteCount: MemoryLayout<T>.size,

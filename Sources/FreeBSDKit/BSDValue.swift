@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-/// A protocol representing a trivial, possibly copyable BSD value type.
+/// A protocol representing a trivial, copyable BSD value type.
 ///
 /// `BSDValue` models plain data structures originating from BSD APIs that:
 /// - have **value semantics**
@@ -16,7 +16,10 @@
 /// - `struct stat`
 /// - `sockaddr`
 /// - `timespec`
-public protocol BSDValue: ~Copyable {
+///
+/// This protocol is distinct from `BSDResource`, which represents owned
+/// resources like file descriptors that require explicit lifecycle management.
+public protocol BSDValue {
     /// The underlying BSD type represented by this value.
     associatedtype RAWBSD
 
