@@ -8,8 +8,10 @@
 
 /// Errors produced by the BPC transport layer.
 public enum BPCError: Error, Sendable {
-    /// The underlying socket connection was lost.
+    /// The underlying socket connection was lost due to remote disconnect.
     case disconnected
+    /// The endpoint was explicitly stopped by calling `stop()`.
+    case stopped
     /// The listener socket has been closed.
     case listenerClosed
     /// ``BPCEndpoint/start()`` or ``BPCListener/start()`` has not been called.
@@ -24,13 +26,17 @@ public enum BPCError: Error, Sendable {
     case unexpectedMessage(MessageID)
     /// An operation did not complete within the allowed time.
     case timeout
+    /// Too many file descriptors in message (maximum is 254).
+    case tooManyDescriptors(Int)
 }
 
 extension BPCError: CustomStringConvertible {
     public var description: String {
         switch self {
         case .disconnected:
-            return "BPC connection lost"
+            return "BPC connection lost (remote disconnect)"
+        case .stopped:
+            return "BPC endpoint stopped"
         case .listenerClosed:
             return "BPC listener socket closed"
         case .notStarted:
@@ -45,6 +51,8 @@ extension BPCError: CustomStringConvertible {
             return "Unexpected BPC message: \(id)"
         case .timeout:
             return "BPC operation timed out"
+        case .tooManyDescriptors(let count):
+            return "Too many file descriptors (\(count)); maximum is 254 per message"
         }
     }
 }
