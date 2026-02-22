@@ -106,6 +106,7 @@ public actor BSDListener: BPCListener {
     // MARK: Lifecycle
 
     public func start() {
+        guard state == .idle else { return }
         state = .running
         let (stream, continuation) = AsyncThrowingStream.makeStream(of: BSDEndpoint.self)
         connectionStream = stream
@@ -125,6 +126,7 @@ public actor BSDListener: BPCListener {
     }
 
     public func stop() {
+        guard state != .stopped else { return }
         state = .stopped
         acceptLoopTask?.cancel()
         acceptLoopTask = nil

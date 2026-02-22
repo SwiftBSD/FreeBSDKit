@@ -69,6 +69,8 @@ final class SocketHolder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard socket != nil else { return }
+        // Close the FD directly - the socket's deinit will attempt to close again
+        // but that's safe (just returns EBADF)
         socket!.unsafe { fd in _ = Glibc.close(fd) }
         self.socket = nil
     }

@@ -122,6 +122,7 @@ public actor BSDEndpoint: BPCEndpoint {
     private let ioQueue: DispatchQueue
     private var nextCorrelationID: UInt32 = 1
     private var pendingReplies: [UInt32: CheckedContinuation<Message, Error>] = [:]
+    private var pendingTimeouts: [UInt32: Task<Void, Never>] = [:]
     private var incomingContinuation: AsyncStream<Message>.Continuation?
     private var messageStream: AsyncStream<Message>?
     private var receiveLoopTask: Task<Void, Never>?
@@ -143,6 +144,7 @@ public actor BSDEndpoint: BPCEndpoint {
     // MARK: Lifecycle
 
     public func start() {
+        guard state == .idle else { return }
         state = .running
         let (stream, continuation) = AsyncStream.makeStream(of: Message.self)
         messageStream = stream
@@ -154,6 +156,7 @@ public actor BSDEndpoint: BPCEndpoint {
     }
 
     public func stop() {
+        guard state != .stopped else { return }
         state = .stopped
         receiveLoopTask?.cancel()
         receiveLoopTask = nil
@@ -191,7 +194,11 @@ public actor BSDEndpoint: BPCEndpoint {
         var outgoing = message
         outgoing.correlationID = nextCorrelationID
         let correlationID = nextCorrelationID
-        nextCorrelationID &+= 1
+        // Increment and skip 0 (reserved for unsolicited messages)
+        nextCorrelationID = nextCorrelationID &+ 1
+        if nextCorrelationID == 0 {
+            nextCorrelationID = 1
+        }
 
         try await send(outgoing)
 
@@ -200,12 +207,12 @@ public actor BSDEndpoint: BPCEndpoint {
 
             // Start a timeout task if timeout is specified
             if let timeout = timeout {
-                Task {
+                let timeoutTask = Task { [correlationID] in
                     try? await Task.sleep(for: timeout)
-                    if let pending = pendingReplies.removeValue(forKey: correlationID) {
-                        pending.resume(throwing: BPCError.timeout)
-                    }
+                    // Call back to the actor to handle timeout
+                    await self.handleTimeout(correlationID)
                 }
+                pendingTimeouts[correlationID] = timeoutTask
             }
         }
     }
@@ -305,10 +312,22 @@ public actor BSDEndpoint: BPCEndpoint {
 
     // MARK: - Private
 
+    private func handleTimeout(_ id: UInt32) async {
+        // Remove both the continuation and the timeout task
+        pendingTimeouts.removeValue(forKey: id)
+        if let pending = pendingReplies.removeValue(forKey: id) {
+            pending.resume(throwing: BPCError.timeout)
+        }
+    }
+
     /// Routes an incoming message to a waiting `request()` caller or the unsolicited stream.
     private func dispatch(_ message: Message) {
         if message.correlationID != 0,
            let continuation = pendingReplies.removeValue(forKey: message.correlationID) {
+            // Cancel and remove the timeout task if it exists
+            if let timeoutTask = pendingTimeouts.removeValue(forKey: message.correlationID) {
+                timeoutTask.cancel()
+            }
             continuation.resume(returning: message)
         } else {
             incomingContinuation?.yield(message)
@@ -344,6 +363,13 @@ public actor BSDEndpoint: BPCEndpoint {
 
     /// Fails all suspended callers and closes the unsolicited message stream.
     private func teardown(throwing error: Error) {
+        // Cancel all pending timeout tasks
+        for (_, task) in pendingTimeouts {
+            task.cancel()
+        }
+        pendingTimeouts.removeAll()
+
+        // Fail all pending replies
         for (_, continuation) in pendingReplies {
             continuation.resume(throwing: error)
         }
@@ -403,6 +429,7 @@ public actor BSDEndpoint: BPCEndpoint {
         var flags: UInt8 = 0
 
         // Handle out-of-line payload if needed
+        var shmDescriptor: Int32? = nil
         if payload.count > Self.MAX_INLINE_PAYLOAD {
             // Create anonymous shared memory for the payload
             // This is capability-mode safe (no namespace access required)
@@ -416,13 +443,20 @@ public actor BSDEndpoint: BPCEndpoint {
                 flags: [.shared]
             )
 
-            // Copy payload to shared memory
+            // Copy payload to shared memory and unmap
             payload.withUnsafeBytes { payloadBytes in
+                // Safe to force-unwrap: we only reach here if count > MAX_INLINE_PAYLOAD
+                guard let source = payloadBytes.baseAddress else {
+                    preconditionFailure("Payload baseAddress is nil despite non-empty count")
+                }
                 UnsafeMutableRawPointer(mutating: region.base).copyMemory(
-                    from: payloadBytes.baseAddress!,
+                    from: source,
                     byteCount: payload.count
                 )
             }
+
+            // Unmap the region after copying (consuming the region)
+            try region.unmap()
 
             // Limit the shared memory descriptor to read-only rights before sending
             // This ensures the receiver cannot modify the payload
@@ -433,8 +467,11 @@ public actor BSDEndpoint: BPCEndpoint {
             ])
             _ = shm.limit(rights: readOnlyRights)
 
+            // Extract the fd and track it for cleanup on error
+            shmDescriptor = shm.take()
+
             // Create OpaqueDescriptorRef for the shm with .shm kind
-            let shmRef = OpaqueDescriptorRef(shm.take(), kind: .shm)
+            let shmRef = OpaqueDescriptorRef(shmDescriptor!, kind: .shm)
 
             // Prepend to descriptors list
             descriptors.insert(shmRef, at: 0)
@@ -478,8 +515,17 @@ public actor BSDEndpoint: BPCEndpoint {
         wireData.append(payload)
         wireData.append(trailer)
 
-        try socketHolder.withSocketOrThrow { socket in
-            try socket.sendDescriptors(descriptors, payload: wireData)
+        do {
+            try socketHolder.withSocketOrThrow { socket in
+                try socket.sendDescriptors(descriptors, payload: wireData)
+            }
+        } catch {
+            // If send failed and we created an OOL shm descriptor, clean it up
+            // The descriptor was consumed by take() but never successfully sent
+            if let fd = shmDescriptor {
+                _ = Glibc.close(fd)
+            }
+            throw error
         }
     }
 
@@ -509,6 +555,15 @@ public actor BSDEndpoint: BPCEndpoint {
             throw BPCError.unsupportedVersion(version)
         }
 
+        // Validate OOL payload flag consistency
+        let hasOOLPayload = (flags & 0x01) != 0
+        if hasOOLPayload {
+            // If OOL flag is set, inline payload length must be 0
+            guard payloadLength == 0 else {
+                throw BPCError.invalidMessageFormat
+            }
+        }
+
         let expectedTotal = 256 + Int(payloadLength) + 256
         guard wireData.count == expectedTotal else {
             throw BPCError.invalidMessageFormat
@@ -534,7 +589,6 @@ public actor BSDEndpoint: BPCEndpoint {
 
         // Handle out-of-line payload
         var payload: Data
-        let hasOOLPayload = (flags & 0x01) != 0
 
         if hasOOLPayload {
             guard !descriptors.isEmpty else {
@@ -555,8 +609,10 @@ public actor BSDEndpoint: BPCEndpoint {
 
             // Get the size of the shm
             var stat = stat()
-            guard Glibc.fstat(shmFD, &stat) == 0 else {
-                try BSDError.throwErrno(errno)
+            let fstatResult = Glibc.fstat(shmFD, &stat)
+            guard fstatResult == 0 else {
+                let err = errno
+                try BSDError.throwErrno(err)
             }
 
             let shmSize = Int(stat.st_size)
@@ -566,15 +622,16 @@ public actor BSDEndpoint: BPCEndpoint {
 
             // Map and read
             let ptr = Glibc.mmap(nil, shmSize, PROT_READ, MAP_SHARED, shmFD, 0)
-            guard ptr != MAP_FAILED else {
-                try BSDError.throwErrno(errno)
+            guard ptr != MAP_FAILED, let mappedPtr = ptr else {
+                let err = errno
+                try BSDError.throwErrno(err)
             }
 
             defer {
-                Glibc.munmap(ptr, shmSize)
+                Glibc.munmap(mappedPtr, shmSize)
             }
 
-            payload = Data(bytes: ptr!, count: shmSize)
+            payload = Data(bytes: mappedPtr, count: shmSize)
         } else {
             // Inline payload
             payload = Data(wireData[256..<(256 + Int(payloadLength))])

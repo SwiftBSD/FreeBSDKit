@@ -360,7 +360,7 @@ public struct MessageID: RawRepresentable, Hashable, Sendable {
     /// The upper bound (exclusive) of the system-reserved message ID range.
     ///
     /// User-defined message IDs should be >= this value.
-    public static let userSpaceStart: UInt32 = 2056
+    public static let userSpaceStart: UInt32 = 256
 
     /// Checks if this message ID is in the system-reserved range (0-255).
     public var isSystemReserved: Bool {
