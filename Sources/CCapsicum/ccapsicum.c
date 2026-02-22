@@ -81,6 +81,7 @@ ccapsicum_selector(ccapsicum_right_bridge r)
     switch (r) {
     case CCAP_RIGHT_READ:            return CAP_READ;
     case CCAP_RIGHT_WRITE:           return CAP_WRITE;
+    case CCAP_RIGHT_SEEK_TELL:       return CAP_SEEK_TELL;
     case CCAP_RIGHT_SEEK:            return CAP_SEEK;
     case CCAP_RIGHT_ACCEPT:          return CAP_ACCEPT;
     case CCAP_RIGHT_ACL_CHECK:       return CAP_ACL_CHECK;
@@ -128,6 +129,8 @@ ccapsicum_selector(ccapsicum_right_bridge r)
     case CCAP_RIGHT_KQUEUE_EVENT:    return CAP_KQUEUE_EVENT;
     case CCAP_RIGHT_LINKAT_SOURCE:   return CAP_LINKAT_SOURCE;
     case CCAP_RIGHT_LINKAT_TARGET:   return CAP_LINKAT_TARGET;
+    case CCAP_RIGHT_RENAMEAT_SOURCE: return CAP_RENAMEAT_SOURCE;
+    case CCAP_RIGHT_RENAMEAT_TARGET: return CAP_RENAMEAT_TARGET;
     case CCAP_RIGHT_LISTEN:          return CAP_LISTEN;
     case CCAP_RIGHT_LOOKUP:          return CAP_LOOKUP;
     case CCAP_RIGHT_MAC_GET:         return CAP_MAC_GET;
@@ -151,6 +154,7 @@ ccapsicum_selector(ccapsicum_right_bridge r)
     case CCAP_RIGHT_SEM_GETVALUE:    return CAP_SEM_GETVALUE;
     case CCAP_RIGHT_SEM_POST:        return CAP_SEM_POST;
     case CCAP_RIGHT_SEM_WAIT:        return CAP_SEM_WAIT;
+    case CCAP_RIGHT_RECV:            return CAP_RECV;
     case CCAP_RIGHT_SEND:            return CAP_SEND;
     case CCAP_RIGHT_SETSOCKOPT:      return CAP_SETSOCKOPT;
     case CCAP_RIGHT_SHUTDOWN:        return CAP_SHUTDOWN;

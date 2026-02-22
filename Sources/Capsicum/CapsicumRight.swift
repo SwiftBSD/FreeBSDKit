@@ -16,7 +16,11 @@ public enum CapsicumRight: CaseIterable, Sendable {
     /// Permit write operations such as `write(2)`, `pwrite(2)`, etc.
     case write
     
+    /// Permit `lseek(fd, 0, SEEK_CUR)` to get current position.
+    case seekTell
+
     /// Permit seeking on the file descriptor (e.g., `lseek(2)`).
+    /// This combines `seekTell` with additional seek rights.
     case seek
     
     /// Permit accepting connections (`accept(2)` / `accept4(2)`).
@@ -160,6 +164,12 @@ public enum CapsicumRight: CaseIterable, Sendable {
     
     /// Permit linking within a target directory (`linkat(2)`).
     case linkatTarget
+
+    /// Permit renaming from a source directory (`renameat(2)`).
+    case renameatSource
+
+    /// Permit renaming to a target directory (`renameat(2)`).
+    case renameatTarget
     
     /// Permit listening for connections (`listen(2)`).
     case listen
@@ -230,7 +240,10 @@ public enum CapsicumRight: CaseIterable, Sendable {
     /// Permit waiting on a semaphore (`sem_wait(3)`).
     case semWait
     
-    /// Permit sending operations on sockets (`CAP_SEND` alias).
+    /// Permit receiving operations on sockets (`CAP_RECV` alias for CAP_READ).
+    case recv
+
+    /// Permit sending operations on sockets (`CAP_SEND` alias for CAP_WRITE).
     case send
     
     /// Permit setting socket options (`setsockopt(2)`).
@@ -255,6 +268,7 @@ public enum CapsicumRight: CaseIterable, Sendable {
         switch self {
         case .read:               return CCAP_RIGHT_READ
         case .write:              return CCAP_RIGHT_WRITE
+        case .seekTell:           return CCAP_RIGHT_SEEK_TELL
         case .seek:               return CCAP_RIGHT_SEEK
         case .accept:             return CCAP_RIGHT_ACCEPT
         case .aclCheck:           return CCAP_RIGHT_ACL_CHECK
@@ -302,6 +316,8 @@ public enum CapsicumRight: CaseIterable, Sendable {
         case .kqueueEvent:        return CCAP_RIGHT_KQUEUE_EVENT
         case .linkatSource:       return CCAP_RIGHT_LINKAT_SOURCE
         case .linkatTarget:       return CCAP_RIGHT_LINKAT_TARGET
+        case .renameatSource:     return CCAP_RIGHT_RENAMEAT_SOURCE
+        case .renameatTarget:     return CCAP_RIGHT_RENAMEAT_TARGET
         case .listen:             return CCAP_RIGHT_LISTEN
         case .lookup:             return CCAP_RIGHT_LOOKUP
         case .macGet:             return CCAP_RIGHT_MAC_GET
@@ -325,6 +341,7 @@ public enum CapsicumRight: CaseIterable, Sendable {
         case .semGetValue:        return CCAP_RIGHT_SEM_GETVALUE
         case .semPost:            return CCAP_RIGHT_SEM_POST
         case .semWait:            return CCAP_RIGHT_SEM_WAIT
+        case .recv:               return CCAP_RIGHT_RECV
         case .send:               return CCAP_RIGHT_SEND
         case .setsockopt:         return CCAP_RIGHT_SETSOCKOPT
         case .shutdown:           return CCAP_RIGHT_SHUTDOWN

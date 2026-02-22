@@ -19,18 +19,30 @@ public enum CapsicumHelper {
     public static func limitStream(fd: Int32, options: StreamLimitOptions) throws {
         let result = caph_limit_stream(fd, options.rawValue)
         guard result == 0 else {
-            throw CapsicumError.errorFromErrno(errno)
+            let err = errno
+            // Ignore ENOSYS (Capsicum not supported on this system)
+            if err == ENOSYS {
+                return
+            }
+            throw CapsicumError.errorFromErrno(err)
         }
     }
 
     /// Limit ioctl commands on a descriptor.
     public static func limitIoctls(fd: Int32, commands: [IoctlCommand]) throws {
         let values = commands.map(\.rawValue)
-        let res = values.withUnsafeBufferPointer { buffer in
-            ccapsicum_limit_ioctls(fd, buffer.baseAddress, buffer.count)
+        var result: Int32 = -1
+        var capturedErrno: Int32 = 0
+
+        values.withUnsafeBufferPointer { buffer in
+            result = ccapsicum_limit_ioctls(fd, buffer.baseAddress, buffer.count)
+            if result == -1 {
+                capturedErrno = errno
+            }
         }
-        guard res != -1 else {
-            throw CapsicumError.errorFromErrno(errno)
+
+        guard result != -1 else {
+            throw CapsicumError.errorFromErrno(capturedErrno)
         }
     }
 
@@ -38,30 +50,37 @@ public enum CapsicumHelper {
     public static func limitFcntls(fd: Int32, rights: FcntlRights) throws {
         let res = ccapsicum_limit_fcntls(fd, rights.rawValue)
         guard res == 0 else {
-            switch errno {
+            let err = errno
+            switch err {
             case EBADF:       throw CapsicumFcntlError.invalidDescriptor
             case EINVAL:      throw CapsicumFcntlError.invalidFlag
             case ENOTCAPABLE: throw CapsicumFcntlError.notCapable
-            default:          throw CapsicumFcntlError.system(errno: errno)
+            default:          throw CapsicumFcntlError.system(errno: err)
             }
         }
     }
     /// Get ioctl limits.
     public static func getIoctls(fd: Int32, maxCount: Int = 32) throws -> [IoctlCommand] {
-        var buffer = [UInt](repeating: 0, count: maxCount)
+        var buffer = [CUnsignedLong](repeating: 0, count: maxCount)
         var result: Int = -1
+        var capturedErrno: Int32 = 0
 
         buffer.withUnsafeMutableBufferPointer { ptr in
             result = ccapsicum_get_ioctls(fd, ptr.baseAddress, ptr.count)
+            if result < 0 {
+                capturedErrno = errno
+            }
         }
 
         guard result >= 0 else {
-            switch errno {
+            switch capturedErrno {
             case EBADF:  throw CapsicumIoctlError.invalidDescriptor
             case EFAULT: throw CapsicumIoctlError.badBuffer
-            default:     throw CapsicumIoctlError.system(errno: errno)
+            default:     throw CapsicumIoctlError.system(errno: capturedErrno)
             }
         }
+
+        // CAP_IOCTLS_ALL is SSIZE_MAX - if returned, all ioctls are allowed
         guard result != CAP_IOCTLS_ALL else {
             throw CapsicumIoctlError.allIoctlsAllowed
         }
@@ -73,7 +92,8 @@ public enum CapsicumHelper {
         var rawMask: UInt32 = 0
         let res = ccapsicum_get_fcntls(fd, &rawMask)
         guard res >= 0 else {
-            throw CapsicumFcntlError.system(errno: errno)
+            let err = errno
+            throw CapsicumFcntlError.system(errno: err)
         }
         return FcntlRights(rawValue: rawMask)
     }
